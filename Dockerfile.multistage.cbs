@@ -1,8 +1,8 @@
 FROM golang:1.10
 
-ADD . /go/src/github.com/dbdd4us/csi-tencentcloud
+ADD . /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 
-WORKDIR /go/src/github.com/dbdd4us/csi-tencentcloud
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 
 RUN go build -v --ldflags '-linkmode external -extldflags "-static"' -o /go/src/bin/csi-tencentcloud cmd/cbs/main.go
 

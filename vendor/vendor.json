@@ -365,5 +365,5 @@
 			"revisionTime": "2018-07-16T07:00:57Z"
 		}
 	],
-	"rootPath": "github.com/dbdd4us/csi-tencentcloud"
+	"rootPath": "github.com/tencentcloud/kubernetes-csi-tencentcloud"
 }
