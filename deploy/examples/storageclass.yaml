@@ -1,0 +1,49 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-csi
+provisioner: com.tencent.cloud.csi.cbs
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-basic
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskType: CLOUD_BASIC
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-premium
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskType: CLOUD_PREMIUM
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-ssd
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskType: CLOUD_SSD
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-basic-prepaid
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskType: CLOUD_BASIC
+  diskChargeType: PREPAID
+  diskChargeTypePrepaidPeriod: "2"
+  diskChargePrepaidRenewFlag: NOTIFY_AND_AUTO_RENEW
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-basic-encrypt
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskType: CLOUD_BASIC
+  encrypt: ENCRYPT

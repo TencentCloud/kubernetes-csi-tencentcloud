@@ -1,0 +1,16 @@
+FROM golang:1.10
+
+ADD . /go/src/github.com/dbdd4us/csi-tencentcloud
+
+WORKDIR /go/src/github.com/dbdd4us/csi-tencentcloud
+
+RUN go build -v --ldflags '-linkmode external -extldflags "-static"' -o /go/src/bin/csi-tencentcloud cmd/cbs/main.go
+
+
+FROM alpine:3.6
+
+RUN apk add --no-cache ca-certificates e2fsprogs
+
+COPY --from=0 /go/src/bin/csi-tencentcloud /bin/csi-tencentcloud
+
+CMD ["/bin/csi-tencentcloud"]
