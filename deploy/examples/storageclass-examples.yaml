@@ -1,12 +1,6 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: cbs-csi
-provisioner: com.tencent.cloud.csi.cbs
----
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
   name: cbs-basic
 provisioner: com.tencent.cloud.csi.cbs
 parameters:
