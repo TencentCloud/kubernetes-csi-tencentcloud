@@ -78,7 +78,7 @@ spec:
         - name: global-mount-dir
           hostPath:
             path: /var/lib/kubelet/plugins/kubernetes.io/csi
-            type: Directory
+            type: DirectoryOrCreate
         - name: device-dir
           hostPath:
             path: /dev
