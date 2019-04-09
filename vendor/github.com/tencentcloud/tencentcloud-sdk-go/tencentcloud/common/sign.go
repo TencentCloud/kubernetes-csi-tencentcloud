@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,6 +26,17 @@ func Sign(s, secretKey, method string) string {
 	hashed.Write([]byte(s))
 
 	return base64.StdEncoding.EncodeToString(hashed.Sum(nil))
+}
+
+func sha256hex(s string) string {
+	b := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(b[:])
+}
+
+func hmacsha256(s, key string) string {
+	hashed := hmac.New(sha256.New, []byte(key))
+	hashed.Write([]byte(s))
+	return string(hashed.Sum(nil))
 }
 
 func signRequest(request tchttp.Request, credential *Credential, method string) (err error) {
@@ -58,7 +70,7 @@ func getStringToSign(request tchttp.Request) string {
 	params := request.GetParams()
 	// sort params
 	keys := make([]string, 0, len(params))
-	for k := range params {
+	for k, _ := range params {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
