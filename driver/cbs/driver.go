@@ -35,8 +35,8 @@ func NewDriver(region string, zone string, secretId string, secretKey string) (*
 	return &driver, nil
 }
 
-func (drv *Driver) Run(endpoint *url.URL) error {
-	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone)
+func (drv *Driver) Run(endpoint *url.URL, cbsUrl string) error {
+	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone, cbsUrl)
 	if err != nil {
 		return err
 	}

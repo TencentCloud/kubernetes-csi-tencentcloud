@@ -1,7 +1,9 @@
 package cbs
 
 import (
+	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
@@ -50,6 +52,14 @@ var (
 	EncryptAttr   = "encrypt"
 	EncryptEnable = "ENCRYPT"
 
+	//cbs disk zone
+	DiskZone = "diskZone"
+
+	//cbs disk zones
+	DiskZones = "diskZones"
+
+	//cbs disk asp Id
+	AspId = "aspId"
 	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
@@ -60,8 +70,10 @@ type cbsController struct {
 	zone      string
 }
 
-func newCbsController(secretId, secretKey, region, zone string) (*cbsController, error) {
-	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, profile.NewClientProfile())
+func newCbsController(secretId, secretKey, region, zone, cbsUrl string) (*cbsController, error) {
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = cbsUrl
+	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, cpf)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +188,31 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		createCbsReq.Encrypt = &EncryptEnable
 	}
 
+	//zone parameters
+	volumeZone, ok1 := req.Parameters[DiskZone]
+	volumeZones, ok2 := req.Parameters[DiskZones]
+	if ok1 && ok2 {
+		return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
+	}
+	if !ok1 && !ok2{
+		volumeZone = ctrl.zone
+	}
+
+	if !ok1 && ok2 {
+		zonesSlice := strings.Split(volumeZones, ",")
+		hash := rand.Uint32()
+		volumeZone = zonesSlice[hash % uint32(len(zonesSlice))]
+	}
+
 	createCbsReq.Placement = &cbs.Placement{
-		Zone: &ctrl.zone,
+		Zone: &volumeZone,
+	}
+
+	//aspId parameters
+	//zone parameters
+	aspId, ok1 := req.Parameters[AspId]
+	if !ok {
+		aspId = ""
 	}
 
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
@@ -213,6 +248,15 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 					if *d.DiskId == diskId && d.DiskState != nil {
 						if *d.DiskState == StatusAttached || *d.DiskState == StatusUnattached {
 							disk = d
+							if aspId != "" {
+								bindReq := cbs.NewBindAutoSnapshotPolicyRequest()
+								bindReq.AutoSnapshotPolicyId = &aspId
+								bindReq.DiskIds = []*string{disk.DiskId}
+								_, err := ctrl.cbsClient.BindAutoSnapshotPolicy(bindReq)
+								if err != nil {
+
+								}
+							}
 							return &csi.CreateVolumeResponse{
 								Volume: &csi.Volume{
 									Id:            *disk.DiskId,
