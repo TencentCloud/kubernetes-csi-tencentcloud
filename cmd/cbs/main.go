@@ -23,6 +23,7 @@ var (
 	secretKey = flag.String("secret_key", "", "tencent cloud api secret key")
 	region    = flag.String("region", "", "tencent cloud api region")
 	zone      = flag.String("zone", "", "cvm instance region")
+	cbsUrl    = flag.String("cbs_url", "cbs.internal.tencentcloudapi.com", "cbs api domain")
 )
 
 func main() {
@@ -75,7 +76,7 @@ func main() {
 		glog.Fatal(err)
 	}
 
-	if err := drv.Run(u); err != nil {
+	if err := drv.Run(u, *cbsUrl); err != nil {
 		glog.Fatal(err)
 	}
 
