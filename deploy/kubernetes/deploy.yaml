@@ -36,7 +36,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:latest
+          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:v0.2.1
           command:
           - "/bin/csi-tencentcloud"
           args:
@@ -112,7 +112,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/library/csi-external-attacher:0.2.0
+          image: ccr.ccs.tencentyun.com/library/csi-external-attacher:v0.2.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -124,7 +124,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-tencentcloud
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:latest
+          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:v0.2.1
           command:
           - "/bin/csi-tencentcloud"
           args:

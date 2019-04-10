@@ -41,3 +41,27 @@ provisioner: com.tencent.cloud.csi.cbs
 parameters:
   diskType: CLOUD_BASIC
   encrypt: ENCRYPT
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-shanghai-1
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskZone: ap-shanghai-1
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-shanghai-1-2
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  diskZones: ap-shanghai-1,ap-shanghai-2
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cbs-asp
+provisioner: com.tencent.cloud.csi.cbs
+parameters:
+  aspId: asp-***
