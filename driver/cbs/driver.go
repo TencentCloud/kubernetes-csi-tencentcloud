@@ -7,14 +7,15 @@ import (
 	"os"
 	"path"
 
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
-var (
-	DriverName     = "com.tencent.cloud.csi.cbs"
-	DriverVerision = "0.1.0"
+const (
+	DriverName      = "com.tencent.cloud.csi.cbs"
+	DriverVerision  = "1.0.0"
+	TopologyZoneKey = "topology." + DriverName + "/zone"
 )
 
 type Driver struct {

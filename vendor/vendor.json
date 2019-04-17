@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "EJF01Yis0Qa+Mboe5mHpK0kLuRM=",
+			"path": "github.com/container-storage-interface/spec/lib/go/csi",
+			"revision": "9aeb8c98ba539c5c4b9573bbe79d128a6d54d96f",
+			"revisionTime": "2018-11-15T05:32:36Z"
+		},
+		{
 			"checksumSHA1": "w7wR+UZBh669l8z+6zGZROzPOu4=",
 			"path": "github.com/container-storage-interface/spec/lib/go/csi/v0",
 			"revision": "dae35648f6f8ea9a4c9514c4e428e20443abf7ac",
@@ -27,16 +33,22 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
-			"checksumSHA1": "ag4CscDKi8ZBExU8jJf03rxonF0=",
+			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "14aad3d5ea4c323bcd7a2137e735da24a76e814c",
-			"revisionTime": "2018-07-15T08:23:32Z"
+			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
+			"revisionTime": "2019-04-09T05:09:43Z"
 		},
 		{
-			"checksumSHA1": "tkJPssYejSjuAwE2tdEnoEIj93Q=",
+			"checksumSHA1": "WOkXetG3AqJnfVVuqTJvdukcHps=",
+			"path": "github.com/golang/protobuf/protoc-gen-go/descriptor",
+			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
+			"revisionTime": "2019-04-09T05:09:43Z"
+		},
+		{
+			"checksumSHA1": "aEiR2m3NGaMGTbUW5P+w5gKFyc8=",
 			"path": "github.com/golang/protobuf/ptypes",
-			"revision": "14aad3d5ea4c323bcd7a2137e735da24a76e814c",
-			"revisionTime": "2018-07-15T08:23:32Z"
+			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
+			"revisionTime": "2019-04-09T05:09:43Z"
 		},
 		{
 			"checksumSHA1": "G0aiY+KmzFsQLTNzRAGRhJNSj7A=",

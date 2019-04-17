@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -165,15 +165,16 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (node *cbsNode) NodeGetId(context.Context, *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
-	nodeId, err := node.metadataClient.InstanceID()
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	return &csi.NodeGetIdResponse{
-		NodeId: nodeId,
-	}, nil
-}
+// TODO this method has deprecated
+// func (node *cbsNode) NodeGetId(context.Context, *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
+// 	nodeId, err := node.metadataClient.InstanceID()
+// 	if err != nil {
+// 		return nil, status.Error(codes.Internal, err.Error())
+// 	}
+// 	return &csi.NodeGetIdResponse{
+// 		NodeId: nodeId,
+// 	}, nil
+// }
 
 func (node *cbsNode) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{{
@@ -185,6 +186,12 @@ func (node *cbsNode) NodeGetCapabilities(context.Context, *csi.NodeGetCapabiliti
 	}}}, nil
 }
 
+// TODO need update, node id put here
 func (node *cbsNode) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+// TODO implement
+func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
 }
