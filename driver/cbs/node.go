@@ -7,6 +7,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
+	"github.com/golang/glog"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -19,6 +20,10 @@ import (
 var (
 	DiskByIdDevicePath       = "/dev/disk/by-id"
 	DiskByIdDeviceNamePrefix = "virtio-"
+
+	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
+		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+	}
 )
 
 type cbsNode struct {
@@ -27,6 +32,7 @@ type cbsNode struct {
 	mounter        mount.SafeFormatAndMount
 }
 
+// TODO  node plugin need idempotent and should use inflight
 func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
 	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, profile.NewClientProfile())
 	if err != nil {
@@ -176,22 +182,48 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 // 	}, nil
 // }
 
-func (node *cbsNode) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{{
-		Type: &csi.NodeServiceCapability_Rpc{
-			Rpc: &csi.NodeServiceCapability_RPC{
-				Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	glog.Infof("NodeGetCapabilities: called with args %+v", *req)
+	var caps []*csi.NodeServiceCapability
+	for _, cap := range nodeCaps {
+		c := &csi.NodeServiceCapability{
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: cap,
+				},
 			},
-		},
-	}}}, nil
+		}
+		caps = append(caps, c)
+	}
+	return &csi.NodeGetCapabilitiesResponse{Capabilities: caps}, nil
 }
 
 // TODO need update, node id put here
-func (node *cbsNode) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	nodeId, err := node.metadataClient.InstanceID()
+	if err != nil {
+		glog.Errorf("NodeGetInfo node.metadataClient.InstanceID() error: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	zone, err := node.metadataClient.Zone()
+	if err != nil {
+		glog.Errorf("NodeGetInfo node.metadataClient.Zone() error: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &csi.NodeGetInfoResponse{
+		NodeId: nodeId,
+		// make sure that the driver works on this particular zone only
+		AccessibleTopology: &csi.Topology{
+			Segments: map[string]string{
+				TopologyZoneKey: zone,
+			},
+		},
+	}, nil
 }
 
 // TODO implement
 func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
 }

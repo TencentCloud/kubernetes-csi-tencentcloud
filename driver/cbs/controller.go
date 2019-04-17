@@ -1,12 +1,11 @@
 package cbs
 
 import (
-	"math/rand"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/glog"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -63,6 +62,22 @@ var (
 	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
+
+	// volumeCaps represents how the volume could be accessed.
+	// It is SINGLE_NODE_WRITER since EBS volume could only be
+	// attached to a single node at any given time.
+	volumeCaps = []csi.VolumeCapability_AccessMode{
+		{
+			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		},
+	}
+
+	// controllerCaps represents the capability of controller service
+	controllerCaps = []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+	}
 )
 
 type cbsController struct {
@@ -189,19 +204,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	//zone parameters
-	volumeZone, ok1 := req.Parameters[DiskZone]
-	volumeZones, ok2 := req.Parameters[DiskZones]
-	if ok1 && ok2 {
-		return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
+	volumeZone, ok := req.Parameters[DiskZone]
+	// volumeZones, ok2 := req.Parameters[DiskZones]
+	// if ok1 && ok2 {
+	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
+	// }
+	glog.Infof("req.GetAccessibilityRequirements() is %v", req.GetAccessibilityRequirements())
+	if !ok {
+		volumeZone = pickAvailabilityZone(req.GetAccessibilityRequirements())
 	}
-	if !ok1 && !ok2 {
+	// TODO maybe we don't need this, controller plugin' node zone is not a property zone for pod.
+	if volumeZone == "" {
 		volumeZone = ctrl.zone
-	}
-
-	if !ok1 && ok2 {
-		zonesSlice := strings.Split(volumeZones, ",")
-		hash := rand.Uint32()
-		volumeZone = zonesSlice[hash%uint32(len(zonesSlice))]
 	}
 
 	createCbsReq.Placement = &cbs.Placement{
@@ -210,7 +224,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	//aspId parameters
 	//zone parameters
-	aspId, ok1 := req.Parameters[AspId]
+	aspId, ok := req.Parameters[AspId]
 	if !ok {
 		aspId = ""
 	}
@@ -455,24 +469,19 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 }
 
 func (ctrl *cbsController) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	return &csi.ControllerGetCapabilitiesResponse{
-		Capabilities: []*csi.ControllerServiceCapability{
-			{
-				Type: &csi.ControllerServiceCapability_Rpc{
-					Rpc: &csi.ControllerServiceCapability_RPC{
-						Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-					},
+	glog.Infof("ControllerGetCapabilities: called with args %+v", *req)
+	var caps []*csi.ControllerServiceCapability
+	for _, cap := range controllerCaps {
+		c := &csi.ControllerServiceCapability{
+			Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: cap,
 				},
 			},
-			{
-				Type: &csi.ControllerServiceCapability_Rpc{
-					Rpc: &csi.ControllerServiceCapability_RPC{
-						Type: csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-					},
-				},
-			},
-		},
-	}, nil
+		}
+		caps = append(caps, c)
+	}
+	return &csi.ControllerGetCapabilitiesResponse{Capabilities: caps}, nil
 }
 
 func (ctrl *cbsController) ValidateVolumeCapabilities(context.Context, *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
@@ -497,4 +506,23 @@ func (ctrl *cbsController) DeleteSnapshot(context.Context, *csi.DeleteSnapshotRe
 
 func (ctrl *cbsController) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
+	if requirement == nil {
+		return ""
+	}
+	for _, topology := range requirement.GetPreferred() {
+		zone, exists := topology.GetSegments()[TopologyZoneKey]
+		if exists {
+			return zone
+		}
+	}
+	for _, topology := range requirement.GetRequisite() {
+		zone, exists := topology.GetSegments()[TopologyZoneKey]
+		if exists {
+			return zone
+		}
+	}
+	return ""
 }
