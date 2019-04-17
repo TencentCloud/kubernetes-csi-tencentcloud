@@ -211,7 +211,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	//aspId parameters
 	//zone parameters
 	aspId, ok1 := req.Parameters[AspId]
-	if !ok {
+	if !ok1 {
 		aspId = ""
 	}
 
