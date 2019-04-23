@@ -2,30 +2,15 @@
 
 `kubernetes-csi-tencentloud` 是腾讯云 `Cloud Block Storage` 服务的一个满足 [CSI](https://github.com/container-storage-interface/spec) 标准实现的插件。这个插件可以让你在 Kubernetes 上使用 Cloud Block Storage。
 
-## 编译
-
-### 编译二进制文件
-将此项目 clone 到 GOPATH 下，假设 GOPATH 为 /root/go
-
-```
-mkdir -p /root/go/src/github.com/tencentcloud/
-git clone https://github.com/tencentcloud/kubernetes-csi-tencentloud.git /root/go/src/github.com/tencentcloud/kubernetes-csi-tencentloud
-cd /root/go/src/github.com/tencentcloud/kubernetes-csi-tencentloud
-go build -v
-```
-
-### 打包 Docker Image (需要 Docker 17.05 或者更高版本)
-
-```
-docker build -f Dockerfile.multistage.cbs -t kubernetes-csi-tencentloud:latest .
-```
-
 ## 在 Kubernetes 上安装
 
 **前置要求:**
 
-* Kubernetes v1.10.x
+* Kubernetes v1.13.x及以上
 * kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true
+* kubelet 需要添加的启动项为：--featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
+* apiserver/controller-manager:  --featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
+* scheduler: --featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
 
 #### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
 
@@ -42,56 +27,44 @@ data:
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
 ```
 
-#### 2. 部署 CSI 插件和 sidecar 容器:
+#### 2. 部署 CSI1.0 需要的crd:
 ```
-kubectl create -f https://raw.githubusercontent.com/TencentCloud/kubernetes-csi-tencentcloud/master/deploy/kubernetes/deploy.yaml
-```
-
-这条命令会做的事情：
-
-* 创建名为 `csi-tencentcloud` 的 cluster role 和 service account 以及对应的 cluster role binding
-* 在集群内以 statefulset 的形式创建 provisioner 和 attacher
-* 在集群内以 daemonset 的形式创建 mounter
-* 创建名为 `cbs-csi` 的 storageclass
-
-#### 3. 测试和验证
-
-创建 kubernetes persistence volume claim：
-
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: csi-pvc
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
-  storageClassName: cbs-csi
+kubectl create -f  deploy/kubernetes/csinodeinfo.yaml
+kubectl create -f  deploy/kubernetes/csidriver.yaml
 ```
 
-创建使用 pvc 的 pod
+#### 3. 部署rbac
+
+创建attacher,provisioner,plugin需要的rbac：
 
 ```
-kind: Pod
-apiVersion: v1
-metadata:
-  name: csi-app
-spec:
-  containers:
-    - name: csi
-      image: busybox
-      volumeMounts:
-      - mountPath: "/data"
-        name: csi-volume
-      command: [ "sleep", "1000000" ]
-  volumes:
-    - name: csi-volume
-      persistentVolumeClaim:
-        claimName: csi-pvc
+kubectl apply -f  deploy/kubernetes/csi-attacher-rbac.yaml
+kubectl apply -f  deploy/kubernetes/csi-nodeplugin-rbac.yaml
+kubectl apply -f  deploy/kubernetes/csi-provisioner-rbac.yaml
+
 ```
+
+#### 4. 创建controller,node和plugin
+创建pluginserver的daemonset, controller和node的statefulset
+
+```
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin.yaml
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin-provisioner.yaml
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
+
+```
+
+#### 5.简单测试验证
+
+```
+创建storageclass:
+    kubectl apply -f  deploy/examples/storageclass-basic.yaml
+创建pvc:
+    kubectl apply -f  deploy/examples/pvc.yaml
+创建申请pvc的pod:
+    kubectl apply -f  deploy/examples/app.yaml
+```
+
 
 ## StorageClass 支持的参数
 
