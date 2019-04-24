@@ -8,9 +8,9 @@
 
 * Kubernetes v1.13.x及以上
 * kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true
-* kubelet 需要添加的启动项为：--featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
-* apiserver/controller-manager:  --featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
-* scheduler: --featuregates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
+* 所有节点的kubelet 需要添加的启动项为：--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
+* apiserver/controller-manager:  --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
+* scheduler: --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
 
 #### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
 
