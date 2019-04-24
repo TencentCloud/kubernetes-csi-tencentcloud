@@ -15,7 +15,7 @@
 #### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
 
 ```
-# deploy/examples/secret.yaml
+# deploy/kubernetes/secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:

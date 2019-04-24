@@ -1,13 +1,16 @@
 package cbs
 
 import (
+	"fmt"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -21,6 +24,8 @@ var (
 	DiskByIdDevicePath       = "/dev/disk/by-id"
 	DiskByIdDeviceNamePrefix = "virtio-"
 
+	MaxAttachVolumePerNode = 20
+
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 	}
@@ -30,6 +35,7 @@ type cbsNode struct {
 	metadataClient *metadata.MetaData
 	cbsClient      *cbs.Client
 	mounter        mount.SafeFormatAndMount
+	idempotent     *util.Idempotent
 }
 
 // TODO  node plugin need idempotent and should use inflight
@@ -46,11 +52,14 @@ func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
 			Interface: mount.New(""),
 			Exec:      mount.NewOsExec(),
 		},
+		idempotent: util.NewIdempotent(),
 	}
 	return &node, nil
 }
 
 func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	glog.Infof("NodeStageVolume: start with args %v", *req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
@@ -60,9 +69,21 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	if req.VolumeCapability == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume has no capabilities")
 	}
+	// cbs is not support rawblock currently
 	if req.VolumeCapability.GetMount() == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume access type is not mount")
 	}
+
+	// 1. check if current req is in progress.
+	if ok := node.idempotent.Insert(req); !ok {
+		msg := fmt.Sprintf("volume %v is in progress", req.VolumeId)
+		return nil, status.Error(codes.Internal, msg)
+	}
+
+	defer func() {
+		glog.Infof("NodeStageVolume: volume %v finished", req.VolumeId)
+		node.idempotent.Delete(req)
+	}()
 
 	diskId := req.VolumeId
 
@@ -70,8 +91,6 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	mountFlags := req.VolumeCapability.GetMount().MountFlags
 	mountFsType := req.VolumeCapability.GetMount().FsType
-
-	diskDevicePath := path.Join(DiskByIdDevicePath, DiskByIdDeviceNamePrefix+diskId)
 
 	if _, err := os.Stat(stagingTargetPath); err != nil {
 		if os.IsNotExist(err) {
@@ -84,7 +103,28 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		}
 	}
 
-	if err := node.mounter.FormatAndMount(diskDevicePath, stagingTargetPath, mountFsType, mountFlags); err != nil {
+	//2. check target path mounted
+	cbsDisk := DiskByIdDeviceNamePrefix + diskId
+	diskSource, err := findCBSVolume(cbsDisk)
+	if err != nil {
+		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", cbsDisk, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	device, _, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
+	if err != nil {
+		glog.Errorf("NodeStageVolume: GetDeviceNameFromMount error %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if diskSource == device {
+		glog.Infof("NodeStageVolume: volume %v already staged", diskId)
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
+	if err := node.mounter.FormatAndMount(diskSource, stagingTargetPath, mountFsType, mountFlags); err != nil {
+		glog.Errorf(
+			"NodeStageVolume: FormatAndMount error diskSource %v stagingTargetPath %v, error %v",
+			diskSource, stagingTargetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -92,13 +132,29 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 }
 
 func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+	glog.Infof("NodeUnstageVolume: start with args %v", *req)
+
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume staging target path is empty")
+	}
+	if req.VolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
 
 	stagingTargetPath := req.StagingTargetPath
 
+	_, refCount, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
+	if err != nil {
+		glog.Errorf("NodeUnstageVolume: GetDeviceNameFromMount error %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if refCount == 0 {
+		glog.Infof("NodeUnstageVolume: %v is not mounted", stagingTargetPath)
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+
 	if err := node.mounter.Unmount(stagingTargetPath); err != nil {
+		glog.Errorf("NodeUnstageVolume: Unmount %v error %v", stagingTargetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -171,17 +227,6 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-// TODO this method has deprecated
-// func (node *cbsNode) NodeGetId(context.Context, *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
-// 	nodeId, err := node.metadataClient.InstanceID()
-// 	if err != nil {
-// 		return nil, status.Error(codes.Internal, err.Error())
-// 	}
-// 	return &csi.NodeGetIdResponse{
-// 		NodeId: nodeId,
-// 	}, nil
-// }
-
 func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	glog.Infof("NodeGetCapabilities: called with args %+v", *req)
 	var caps []*csi.NodeServiceCapability
@@ -198,7 +243,6 @@ func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 	return &csi.NodeGetCapabilitiesResponse{Capabilities: caps}, nil
 }
 
-// TODO need update, node id put here
 func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	nodeId, err := node.metadataClient.InstanceID()
 	if err != nil {
@@ -213,7 +257,9 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 	}
 
 	return &csi.NodeGetInfoResponse{
-		NodeId: nodeId,
+		NodeId:            nodeId,
+		MaxVolumesPerNode: int64(MaxAttachVolumePerNode),
+
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
@@ -226,4 +272,31 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 // TODO implement
 func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
+}
+
+func findCBSVolume(findName string) (device string, err error) {
+	p := filepath.Join("/dev/disk/by-id/", findName)
+	stat, err := os.Lstat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			glog.Infof("cbs block path %q not found", p)
+			return "", fmt.Errorf("cbs block path %q not found", p)
+		}
+		return "", fmt.Errorf("error getting stat of %q: %v", p, err)
+	}
+
+	if stat.Mode()&os.ModeSymlink != os.ModeSymlink {
+		glog.Warningf("cbs block file %q found, but was not a symlink", p)
+		return "", fmt.Errorf("cbs block file %q found, but was not a symlink", p)
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", fmt.Errorf("error reading target of symlink %q: %v", p, err)
+	}
+
+	if !strings.HasPrefix(resolved, "/dev") {
+		return "", fmt.Errorf("resolved symlink for %q was unexpected: %q", p, resolved)
+	}
+
+	return resolved, nil
 }
