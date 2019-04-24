@@ -12,6 +12,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/golang/protobuf/ptypes"
+	"sync"
 )
 
 var (
@@ -77,6 +80,13 @@ var (
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+	}
+
+	SnapshotNormal = "NORMAL"
+
+	cbsSnapshotsMapsCache = &cbsSnapshotsCache{
+		mux:      &sync.Mutex{},
+		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
 	}
 )
 
@@ -220,6 +230,28 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	createCbsReq.Placement = &cbs.Placement{
 		Zone: &volumeZone,
+	}
+
+	if req.VolumeContentSource != nil {
+		snapshot := req.VolumeContentSource.GetSnapshot()
+		if snapshot == nil {
+			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot cannot be empty")
+		}
+		snapshotId := snapshot.GetSnapshotId()
+		if len(snapshotId) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot ID cannot be empty")
+		}
+		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
+		listSnapshotRequest.SnapshotIds = []*string{&snapshotId}
+
+		listSnapshotResponse, err := ctrl.cbsClient.DescribeSnapshots(listSnapshotRequest)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		if len(listSnapshotResponse.Response.SnapshotSet) <= 0 {
+			return nil, status.Error(codes.NotFound, "Volume Snapshot not found")
+		}
+		createCbsReq.SnapshotId = &snapshotId
 	}
 
 	//aspId parameters
@@ -496,12 +528,130 @@ func (ctrl *cbsController) GetCapacity(context.Context, *csi.GetCapacityRequest)
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
-func (ctrl *cbsController) CreateSnapshot(context.Context, *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	if err := ctrl.validateSnapshotReq(req); err != nil {
+		return nil, err
+	}
+	sourceVolumeId := req.GetSourceVolumeId()
+	snapshotName := req.GetName()
+
+	if cbsSnap, err := getCbsSnapshotByName(snapshotName); err == nil {
+		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
+		listSnapshotRequest.SnapshotIds = []*string{&cbsSnap.SnapId}
+		listSnapshotResponse, err := ctrl.cbsClient.DescribeSnapshots(listSnapshotRequest)
+
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
+		if len(listSnapshotResponse.Response.SnapshotSet) >= 0 {
+			for _, s := range listSnapshotResponse.Response.SnapshotSet {
+				if *s.DiskId == cbsSnap.SourceVolumeId {
+					if *s.SnapshotState == SnapshotNormal && *s.Percent == 100 {
+						return &csi.CreateSnapshotResponse{
+							Snapshot: &csi.Snapshot{
+								SizeBytes:      cbsSnap.SizeBytes,
+								SnapshotId:     cbsSnap.SnapId,
+								SourceVolumeId: cbsSnap.SourceVolumeId,
+								CreationTime:   &timestamp.Timestamp{
+									Seconds: cbsSnap.CreatedAt,
+								},
+								ReadyToUse: true,
+							},
+						}, nil
+					}
+				}
+			}
+			return &csi.CreateSnapshotResponse{
+				Snapshot: &csi.Snapshot{
+					SizeBytes:      cbsSnap.SizeBytes,
+					SnapshotId:     cbsSnap.SnapId,
+					SourceVolumeId: cbsSnap.SourceVolumeId,
+					CreationTime:   &timestamp.Timestamp{
+						Seconds: cbsSnap.CreatedAt,
+					},
+					ReadyToUse: false,
+				},
+			}, nil
+		}
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+
+	createSnapRequest := cbs.NewCreateSnapshotRequest()
+	createSnapRequest.DiskId = &sourceVolumeId
+	createSnapRequest.SnapshotName = &snapshotName
+	createSnpResponse, err := ctrl.cbsClient.CreateSnapshot(createSnapRequest)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	snapshotId := *createSnpResponse.Response.SnapshotId
+	listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
+	listSnapshotRequest.SnapshotIds = []*string{&snapshotId}
+	listSnapshotResponse, err := ctrl.cbsClient.DescribeSnapshots(listSnapshotRequest)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if len(listSnapshotResponse.Response.SnapshotSet) <= 0 {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+
+	cbsSnap := &cbsSnapshot{
+		SnapId: snapshotId,
+		SnapName: snapshotName,
+		SourceVolumeId: sourceVolumeId,
+		SizeBytes: int64(*listSnapshotResponse.Response.SnapshotSet[0].DiskSize),
+		CreatedAt: ptypes.TimestampNow().GetSeconds(),
+	}
+
+	cbsSnapshotsMapsCache.add(snapshotId, cbsSnap)
+
+	glog.Infof("req.getSnapshotName is %s", req.GetName())
+
+	return &csi.CreateSnapshotResponse{
+		Snapshot: &csi.Snapshot{
+			SizeBytes:      cbsSnap.SizeBytes,
+			SnapshotId:     cbsSnap.SnapId,
+			SourceVolumeId: cbsSnap.SourceVolumeId,
+			CreationTime: &timestamp.Timestamp{
+				Seconds: cbsSnap.CreatedAt,
+			},
+			ReadyToUse: false,
+		},
+	}, nil
 }
 
-func (ctrl *cbsController) DeleteSnapshot(context.Context, *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+
+	snapshotId := req.GetSnapshotId()
+	if len(snapshotId) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "snapshot id is empty")
+	}
+
+	describeSnapRequest := cbs.NewDescribeSnapshotsRequest()
+	describeSnapRequest.SnapshotIds = []*string{&snapshotId}
+	describeSnapResponse, err := ctrl.cbsClient.DescribeSnapshots(describeSnapRequest)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if len(describeSnapResponse.Response.SnapshotSet) <= 0 {
+		return &csi.DeleteSnapshotResponse{}, nil
+	}
+
+	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
+	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
+	_, err = ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	cbsSnapshotsMapsCache.delete(snapshotId)
+
+	return &csi.DeleteSnapshotResponse{}, nil
 }
 
 func (ctrl *cbsController) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
@@ -525,4 +675,15 @@ func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
 		}
 	}
 	return ""
+}
+
+func (csrl *cbsController) validateSnapshotReq(req *csi.CreateSnapshotRequest) error {
+	// Check sanity of request Snapshot Name, Source Volume Id
+	if len(req.Name) == 0 {
+		return status.Error(codes.InvalidArgument, "Snapshot Name cannot be empty")
+	}
+	if len(req.SourceVolumeId) == 0 {
+		return status.Error(codes.InvalidArgument, "Source Volume ID cannot be empty")
+	}
+	return nil
 }
