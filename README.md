@@ -1,295 +1,88 @@
 # kubernetes-csi-tencentcloud
 
-**Note**: 中文文档请参考[这里](https://github.com/tencentcloud/kubernetes-csi-tencentcloud/blob/master/README_zhCN.md)
+`kubernetes-csi-tencentloud` 是腾讯云 `Cloud Block Storage` 服务的一个满足 [CSI](https://github.com/container-storage-interface/spec) 标准实现的插件。这个插件可以让你在 Kubernetes 上使用 Cloud Block Storage。
 
-A Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec)) Driver for TencentCloud Cloud Block Storage. The CSI plugin allows you to use TencentCloud Cloud Block Storage with Kubernetes.
+## 在 Kubernetes 上安装
 
-## Installing to Kubernetes
+**前置要求:**
 
-**Requirements:**
+* Kubernetes v1.13.x及以上
+* kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true
+* 所有节点的kubelet 需要添加的启动项为：--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
+* apiserver/controller-manager:  --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
+* scheduler: --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
 
-* Kubernetes v1.10.x
-* `--allow-privileged` flag must be set to true for both the API server and the kubelet
-
-#### 1. Create a secret with your TencentCloud API Credential: 
+#### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
 
 ```
-# deploy/kubernetes/secret.yaml
+#  参考示例 deploy/kubernetes/secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
   name: csi-tencentcloud
 data:
-  # value in secret need to base64 encoded
+  # 需要注意的是,secret 的 value 需要进行 base64 编码
   #   echo -n "<SECRET_ID>" | base64
   TENCENTCLOUD_CBS_API_SECRET_ID: "<SECRET_ID>"
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
 ```
 
-#### 2. Deploy the CSI plugin and sidecars:
-
-##### Create Kubernetes role and service account for csi containers
+#### 2. 部署 CSI1.0 需要的crd:
 ```
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: csi-tencentcloud
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-tencentcloud
-rules:
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["get", "list"]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-tencentcloud
-subjects:
-  - kind: ServiceAccount
-    name: csi-tencentcloud
-    namespace: default
-roleRef:
-  kind: ClusterRole
-  name: csi-tencentcloud
-  apiGroup: rbac.authorization.k8s.io
+kubectl create -f  deploy/kubernetes/csinodeinfo.yaml
+kubectl create -f  deploy/kubernetes/csidriver.yaml
 ```
 
-##### Deploy csi node service
+#### 3. 部署rbac
+
+创建attacher,provisioner,plugin需要的rbac：
 
 ```
-# deploy/kubernetes/mounter.yaml
-kind: DaemonSet
-apiVersion: apps/v1beta2
-metadata:
-  name: csi-tencentcloud
-spec:
-  selector:
-    matchLabels:
-      app: csi-tencentcloud
-  template:
-    metadata:
-      labels:
-        app: csi-tencentcloud
-    spec:
-      serviceAccount: csi-tencentcloud
-      hostNetwork: true
-      hostIPC: true
-      containers:
-        - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/library/csi-driver-registrar:0.2.0
-          args:
-            - "--v=5"
-            - "--csi-address=$(ADDRESS)"
-          env:
-            - name: ADDRESS
-              value: /csi/csi.sock
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - name: plugin-dir
-              mountPath: /csi/
-        - name: csi-tencentcloud
-          securityContext:
-            privileged: true
-            capabilities:
-              add: ["SYS_ADMIN"]
-            allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:latest
-          command:
-          - "/bin/csi-tencentcloud"
-          args:
-          - "--v=5"
-          - "--logtostderr=true"
-          - "--endpoint=unix:///csi/csi.sock"
-          env:
-            - name: TENCENTCLOUD_CBS_API_SECRET_ID
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_ID
-            - name: TENCENTCLOUD_CBS_API_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_KEY
-          imagePullPolicy: "Always"
-          volumeMounts:
-            - name: plugin-dir
-              mountPath: /csi/
-            - name: pods-mount-dir
-              mountPath: /var/lib/kubelet/pods
-              mountPropagation: "Bidirectional"
-            - name: global-mount-dir
-              mountPath: /var/lib/kubelet/plugins/kubernetes.io/csi
-              mountPropagation: "Bidirectional"
-            - mountPath: /dev
-              name: device-dir
-      volumes:
-        - name: plugin-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cbs
-            type: DirectoryOrCreate
-        - name: pods-mount-dir
-          hostPath:
-            path: /var/lib/kubelet/pods
-            type: Directory
-        - name: global-mount-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins/kubernetes.io/csi
-            type: Directory
-        - name: device-dir
-          hostPath:
-            path: /dev
-```
-
-##### Deploy csi controller service
-```
-# deploy/kubernetes/provisionerandattacher.yaml
-kind: StatefulSet
-apiVersion: apps/v1beta1
-metadata:
-  name: csi-tencentcloud
-spec:
-  serviceName: "csi-tencentcloud"
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: csi-tencentcloud
-    spec:
-      serviceAccount: csi-tencentcloud
-      containers:
-        - name: csi-provisioner
-          image: ccr.ccs.tencentyun.com/library/csi-external-provisioner:0.2.0
-          args:
-            - "--provisioner=com.tencent.cloud.csi.cbs"
-            - "--csi-address=$(ADDRESS)"
-            - "--v=5"
-            - "-connection-timeout=120s"
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: "IfNotPresent"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
-        - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/library/csi-external-attacher:0.2.0
-          args:
-            - "--v=5"
-            - "--csi-address=$(ADDRESS)"
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: "IfNotPresent"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
-        - name: csi-tencentcloud
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:latest
-          command:
-          - "/bin/csi-tencentcloud"
-          args:
-          - "--v=5"
-          - "--logtostderr=true"
-          - "--endpoint=unix:///var/lib/csi/sockets/pluginproxy/csi.sock"
-          env:
-            - name: TENCENTCLOUD_CBS_API_SECRET_ID
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_ID
-            - name: TENCENTCLOUD_CBS_API_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_KEY
-          imagePullPolicy: "Always"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
-      volumes:
-        - name: socket-dir
-          emptyDir: {}
+kubectl apply -f  deploy/kubernetes/csi-attacher-rbac.yaml
+kubectl apply -f  deploy/kubernetes/csi-nodeplugin-rbac.yaml
+kubectl apply -f  deploy/kubernetes/csi-provisioner-rbac.yaml
 
 ```
 
-##### Create kubernetes storage class
+#### 4. 创建controller,node和plugin
+创建pluginserver的daemonset, controller和node的statefulset
 
 ```
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: cbs-csi
-provisioner: com.tencent.cloud.csi.cbs
-```
-
-#### 3. Test and verify:
-
-Create a PersistentVolumeClaim. 
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin.yaml
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin-provisioner.yaml
+kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
 
 ```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: csi-pvc
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: cbs-csi
-```
 
-After that create a Pod that refers to this volume. When the Pod is created, the volume will be attached, formatted and mounted to the specified Container
+#### 5.简单测试验证
 
 ```
-kind: Pod
-apiVersion: v1
-metadata:
-  name: csi-app
-spec:
-  containers:
-    - name: csi
-      image: busybox
-      volumeMounts:
-      - mountPath: "/data"
-        name: csi-volume
-      command: [ "sleep", "1000000" ]
-  volumes:
-    - name: csi-volume
-      persistentVolumeClaim:
-        claimName: csi-pvc
+创建storageclass:
+    kubectl apply -f  deploy/examples/storageclass-basic.yaml
+创建pvc:
+    kubectl apply -f  deploy/examples/pvc.yaml
+创建申请pvc的pod:
+    kubectl apply -f  deploy/examples/app.yaml
 ```
 
-## Contributing
-If you have any issues or would like to contribute, feel free to open an issue/PR
+
+## StorageClass 支持的参数
+
+**Note**：可以参考[示例](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/examples/storageclass-examples.yaml)
+
+* 如果您集群中的节点存在多个可用区，那么您可以开启cbs存储卷的拓扑感知调度，需要在storageclass中添加`volumeBindingMode: WaitForFirstConsumer`，如deploy/examples/storageclass-topology.yaml，否则可能会出现cbs存储卷因跨可用区而挂载失败。
+* diskType: 代表要创建的 cbs 盘的类型；值为 `CLOUD_BASIC` 代表创建普通云盘，值为 `CLOUD_PREMIUM` 代表创建高性能云盘，值为 `CLOUD_SSD` 代表创建 ssd 云盘
+* diskChargeType: 代表云盘的付费类型；值为 `PREPAID` 代表预付费，值为 `POSTPAID_BY_HOUR` 代表按量付费，需要注意的是，当值为 `PREPAID` 的时候需要指定额外的参数
+* diskChargeTypePrepaidPeriod：代表购买云盘的时长，当付费类型为 `PREPAID` 时需要指定，可选的值包括 `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`，单位为月
+* diskChargePrepaidRenewFlag: 代表云盘的自动续费策略，当付费类型为 `PREPAID` 时需要指定，值为`NOTIFY_AND_AUTO_RENEW` 代表通知过期且自动续费，值为 `NOTIFY_AND_MANUAL_RENEW` 代表通知过期不自动续费，值为 `DISABLE_NOTIFY_AND_MANUAL_RENEW` 代表不通知过期不自动续费
+* encrypt: 代表云盘是否加密，当指定此参数时，唯一可选的值为 `ENCRYPT`
+
+## 不同类型云盘的大小限制
+
+* 普通云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，支持 40-100MB/s 的 IO 吞吐性能和 数百-1000 的随机 IOPS 性能。
+* 高性能云硬盘提供最小 50 GB 到最大 16000 GB 的规格选择。
+* SSD 云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，单块 SSD 云硬盘最高可提供 24000 随机读写IOPS、260MB/s吞吐量的存储性能。
+
+
+## 反馈和建议
+如果你在使用过程中遇到任何问题或者有任何建议，欢迎通过 Issue 反馈。
