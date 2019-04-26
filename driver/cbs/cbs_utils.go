@@ -6,9 +6,9 @@ import (
 )
 
 type cbsSnapshot struct {
-	SourceVolumeId     string `json:"sourceVolumeID"`
+	SourceVolumeId     string `json:"sourceVolumeId"`
 	SnapName           string `json:"snapName"`
-	SnapId             string `json:"sanpID"`
+	SnapId             string `json:"sanpId"`
 	CreatedAt          int64  `json:"createdAt"`
 	SizeBytes          int64  `json:"sizeBytes"`
 }

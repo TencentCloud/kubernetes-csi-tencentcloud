@@ -15,6 +15,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/golang/protobuf/ptypes"
 	"sync"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -93,9 +94,10 @@ var (
 type cbsController struct {
 	cbsClient *cbs.Client
 	zone      string
+	metadataStore util.CachePersister
 }
 
-func newCbsController(secretId, secretKey, region, zone, cbsUrl string) (*cbsController, error) {
+func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePersister util.CachePersister) (*cbsController, error) {
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = cbsUrl
 	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, cpf)
@@ -106,6 +108,7 @@ func newCbsController(secretId, secretKey, region, zone, cbsUrl string) (*cbsCon
 	return &cbsController{
 		cbsClient: client,
 		zone:      zone,
+		metadataStore: cachePersister,
 	}, nil
 }
 
@@ -427,7 +430,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 				}
 			}
 		case <-ctx.Done():
-			return nil, status.Error(codes.Internal, "cbs disk is not attached before deadline exceeded")
+			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not attached before deadline exceeded")
 		}
 	}
 }
@@ -495,7 +498,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 				}
 			}
 		case <-ctx.Done():
-			return nil, status.Error(codes.Internal, "cbs disk is not unattached before deadline exceeded")
+			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not unattached before deadline exceeded")
 		}
 	}
 }
@@ -547,6 +550,10 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		if len(listSnapshotResponse.Response.SnapshotSet) >= 0 {
 			for _, s := range listSnapshotResponse.Response.SnapshotSet {
 				if *s.DiskId == cbsSnap.SourceVolumeId {
+					if err = ctrl.metadataStore.Create(cbsSnap.SnapId, cbsSnap); err != nil {
+						glog.Error("failed to restore metadata for snapshot %s: %v", cbsSnap.SnapId, err)
+						return nil, status.Error(codes.Internal, err.Error())
+					}
 					if *s.SnapshotState == SnapshotNormal && *s.Percent == 100 {
 						return &csi.CreateSnapshotResponse{
 							Snapshot: &csi.Snapshot{
@@ -608,6 +615,11 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 
 	cbsSnapshotsMapsCache.add(snapshotId, cbsSnap)
 
+	if err = ctrl.metadataStore.Create(snapshotId, cbsSnap); err != nil {
+		glog.Error("failed to store metadata for snapshot %s: %v", snapshotId, cbsSnap)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	glog.Infof("req.getSnapshotName is %s", req.GetName())
 
 	return &csi.CreateSnapshotResponse{
@@ -630,26 +642,30 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 		return nil, status.Error(codes.InvalidArgument, "snapshot id is empty")
 	}
 
-	describeSnapRequest := cbs.NewDescribeSnapshotsRequest()
-	describeSnapRequest.SnapshotIds = []*string{&snapshotId}
-	describeSnapResponse, err := ctrl.cbsClient.DescribeSnapshots(describeSnapRequest)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
+	cbsSnap := &cbsSnapshot{}
+	if err := ctrl.metadataStore.Get(snapshotId, cbsSnap); err != nil {
+		if err, ok := err.(*util.CacheEntryNotFound); ok {
+			glog.Info("metadata for snapshot %s not found, assuming the snapshot to be already deleted (%v)", snapshotId, err)
+			return &csi.DeleteSnapshotResponse{}, nil
+		}
 
-	if len(describeSnapResponse.Response.SnapshotSet) <= 0 {
-		return &csi.DeleteSnapshotResponse{}, nil
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
-	_, err = ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
+	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
 
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	cbsSnapshotsMapsCache.delete(snapshotId)
+
+	if err := ctrl.metadataStore.Delete(snapshotId); err != nil {
+		glog.Error("delete metadata for snapshot %s failed for :%v", snapshotId, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 
 	return &csi.DeleteSnapshotResponse{}, nil
 }
@@ -677,7 +693,7 @@ func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
 	return ""
 }
 
-func (csrl *cbsController) validateSnapshotReq(req *csi.CreateSnapshotRequest) error {
+func (ctrl *cbsController) validateSnapshotReq(req *csi.CreateSnapshotRequest) error {
 	// Check sanity of request Snapshot Name, Source Volume Id
 	if len(req.Name) == 0 {
 		return status.Error(codes.InvalidArgument, "Snapshot Name cannot be empty")
@@ -685,5 +701,19 @@ func (csrl *cbsController) validateSnapshotReq(req *csi.CreateSnapshotRequest) e
 	if len(req.SourceVolumeId) == 0 {
 		return status.Error(codes.InvalidArgument, "Source Volume ID cannot be empty")
 	}
+	return nil
+}
+
+// LoadExDataFromMetadataStore loads the cbs snapshot
+// info from metadata store
+func (ctrl *cbsController) LoadExDataFromMetadataStore() error {
+	snap := &cbsSnapshot{}
+	// nolint
+	ctrl.metadataStore.ForAll("snap-(.*)", snap, func(identifier string) error {
+		cbsSnapshotsMapsCache.add(identifier, snap)
+		return nil
+	})
+
+	glog.Infof("Loaded %d snapshots from metadata store", len(cbsSnapshotsMapsCache.cbsSnapshotMaps))
 	return nil
 }

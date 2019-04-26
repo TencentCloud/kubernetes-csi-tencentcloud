@@ -67,6 +67,10 @@ spec:
                 secretKeyRef:
                   name: csi-tencentcloud
                   key: TENCENTCLOUD_CBS_API_SECRET_KEY
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           imagePullPolicy: "Always"
           volumeMounts:
             - name: plugin-dir

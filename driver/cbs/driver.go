@@ -10,6 +10,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 const (
@@ -36,10 +37,14 @@ func NewDriver(region string, zone string, secretId string, secretKey string) (*
 	return &driver, nil
 }
 
-func (drv *Driver) Run(endpoint *url.URL, cbsUrl string) error {
-	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone, cbsUrl)
+func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.CachePersister) error {
+	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone, cbsUrl, cachePersister)
 	if err != nil {
 		return err
+	}
+
+	if err := controller.LoadExDataFromMetadataStore(); err != nil {
+		glog.Fatal("failed to load metadata from store, err %v\n", err)
 	}
 
 	identity, err := newCbsIdentity()
@@ -85,6 +90,7 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string) error {
 			}
 		}
 	}
+
 
 	listener, err := net.Listen(endpoint.Scheme, path.Join(endpoint.Host, endpoint.Path))
 	if err != nil {
