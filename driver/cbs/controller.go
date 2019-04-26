@@ -467,7 +467,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	_, err = ctrl.cbsClient.DetachDisks(detachDiskRequest)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
 
 	ticker := time.NewTicker(time.Second * 5)
