@@ -11,6 +11,6 @@ FROM alpine:3.6
 
 RUN apk add --no-cache ca-certificates e2fsprogs
 
-COPY --from=0 /go/src/bin/csi-tencentcloud /bin/csi-tencentcloud
+COPY --from=0 /go/src/bin/csi-tencentcloud /csi-tencentcloud-cbs
 
-CMD ["/bin/csi-tencentcloud"]
+CMD ["/csi-tencentcloud-cbs"]

@@ -10,6 +10,7 @@ import (
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 const (
@@ -71,12 +72,14 @@ func main() {
 		glog.Fatal("only unix socket is supported currently")
 	}
 
+	cp := util.NewCachePersister()
+
 	drv, err := cbs.NewDriver(*region, *zone, *secretId, *secretKey)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
-	if err := drv.Run(u, *cbsUrl); err != nil {
+	if err := drv.Run(u, *cbsUrl, cp); err != nil {
 		glog.Fatal(err)
 	}
 
