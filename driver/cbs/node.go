@@ -104,7 +104,7 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	}
 
 	//2. check target path mounted
-	cbsDisk := DiskByIdDeviceNamePrefix + diskId
+	cbsDisk := filepath.Join(DiskByIdDevicePath, DiskByIdDeviceNamePrefix+diskId)
 	diskSource, err := findCBSVolume(cbsDisk)
 	if err != nil {
 		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", cbsDisk, err)
@@ -144,6 +144,7 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	stagingTargetPath := req.StagingTargetPath
 
 	_, refCount, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
+	fmt.Printf("refCount is %v", refCount)
 	if err != nil {
 		glog.Errorf("NodeUnstageVolume: GetDeviceNameFromMount error %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -207,6 +208,7 @@ func (node *cbsNode) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	}
 
 	if err := node.mounter.Mount(source, target, mountFsType, mountFlags); err != nil {
+		glog.Errorf("NodePublishVolume: Mount error target %v error %v", target, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -221,6 +223,7 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	targetPath := req.TargetPath
 
 	if err := node.mounter.Unmount(targetPath); err != nil {
+		glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -274,8 +277,7 @@ func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStats
 	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
 }
 
-func findCBSVolume(findName string) (device string, err error) {
-	p := filepath.Join("/dev/disk/by-id/", findName)
+func findCBSVolume(p string) (device string, err error) {
 	stat, err := os.Lstat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
