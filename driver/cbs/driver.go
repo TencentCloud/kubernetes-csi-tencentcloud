@@ -44,7 +44,7 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 	}
 
 	if err := controller.LoadExDataFromMetadataStore(); err != nil {
-		glog.Fatal("failed to load metadata from store, err %v\n", err)
+		glog.Fatalf("failed to load metadata from store, err %v\n", err)
 	}
 
 	identity, err := newCbsIdentity()

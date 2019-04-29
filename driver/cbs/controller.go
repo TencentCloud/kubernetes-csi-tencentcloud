@@ -551,7 +551,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 			for _, s := range listSnapshotResponse.Response.SnapshotSet {
 				if *s.DiskId == cbsSnap.SourceVolumeId {
 					if err = ctrl.metadataStore.Create(cbsSnap.SnapId, cbsSnap); err != nil {
-						glog.Error("failed to restore metadata for snapshot %s: %v", cbsSnap.SnapId, err)
+						glog.Errorf("failed to restore metadata for snapshot %s: %v", cbsSnap.SnapId, err)
 						return nil, status.Error(codes.Internal, err.Error())
 					}
 					if *s.SnapshotState == SnapshotNormal && *s.Percent == 100 {
@@ -616,7 +616,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	cbsSnapshotsMapsCache.add(snapshotId, cbsSnap)
 
 	if err = ctrl.metadataStore.Create(snapshotId, cbsSnap); err != nil {
-		glog.Error("failed to store metadata for snapshot %s: %v", snapshotId, cbsSnap)
+		glog.Errorf("failed to store metadata for snapshot %s: %v", snapshotId, cbsSnap)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -645,7 +645,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 	cbsSnap := &cbsSnapshot{}
 	if err := ctrl.metadataStore.Get(snapshotId, cbsSnap); err != nil {
 		if err, ok := err.(*util.CacheEntryNotFound); ok {
-			glog.Info("metadata for snapshot %s not found, assuming the snapshot to be already deleted (%v)", snapshotId, err)
+			glog.Infof("metadata for snapshot %s not found, assuming the snapshot to be already deleted (%v)", snapshotId, err)
 			return &csi.DeleteSnapshotResponse{}, nil
 		}
 
@@ -663,7 +663,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 	cbsSnapshotsMapsCache.delete(snapshotId)
 
 	if err := ctrl.metadataStore.Delete(snapshotId); err != nil {
-		glog.Error("delete metadata for snapshot %s failed for :%v", snapshotId, err)
+		glog.Errorf("delete metadata for snapshot %s failed for :%v", snapshotId, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
