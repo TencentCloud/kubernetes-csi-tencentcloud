@@ -63,6 +63,13 @@ kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
     kubectl apply -f  deploy/examples/pvc.yaml
 创建申请pvc的pod:
     kubectl apply -f  deploy/examples/app.yaml
+创建snapshotclass:
+    kubectl apply -f  deploy/examples/snapshoter/snapshoterclass.yaml
+创建快照:
+    kubectl apply -f  deploy/examples/snapshoter/snapshot.yaml
+从快照恢复:
+    kubectl apply -f  deploy/examples/snapshoter/restore.yaml
+
 ```
 
 
@@ -76,12 +83,14 @@ kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
 * diskChargeTypePrepaidPeriod：代表购买云盘的时长，当付费类型为 `PREPAID` 时需要指定，可选的值包括 `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`，单位为月
 * diskChargePrepaidRenewFlag: 代表云盘的自动续费策略，当付费类型为 `PREPAID` 时需要指定，值为`NOTIFY_AND_AUTO_RENEW` 代表通知过期且自动续费，值为 `NOTIFY_AND_MANUAL_RENEW` 代表通知过期不自动续费，值为 `DISABLE_NOTIFY_AND_MANUAL_RENEW` 代表不通知过期不自动续费
 * encrypt: 代表云盘是否加密，当指定此参数时，唯一可选的值为 `ENCRYPT`
+* 创建快照声明的pvc状态必须是Bound状态
 
 ## 不同类型云盘的大小限制
 
 * 普通云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，支持 40-100MB/s 的 IO 吞吐性能和 数百-1000 的随机 IOPS 性能。
 * 高性能云硬盘提供最小 50 GB 到最大 16000 GB 的规格选择。
 * SSD 云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，单块 SSD 云硬盘最高可提供 24000 随机读写IOPS、260MB/s吞吐量的存储性能。
+* 所有类型磁盘大小必须是10的倍数
 
 
 ## 反馈和建议
