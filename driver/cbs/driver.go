@@ -14,7 +14,7 @@ import (
 
 var (
 	DriverName     = "com.tencent.cloud.csi.cbs"
-	DriverVerision = "0.1.0"
+	DriverVerision = "0.3.0"
 )
 
 type Driver struct {

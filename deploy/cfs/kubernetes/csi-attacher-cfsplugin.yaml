@@ -1,0 +1,63 @@
+# This YAML file contains attacher & csi driver API objects that are necessary
+# to run external CSI attacher for cfs
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-attacher-cfsplugin
+  labels:
+    app: csi-attacher-cfsplugin
+spec:
+  selector:
+    app: csi-attacher-cfsplugin
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: csi-attacher-cfsplugin
+spec:
+  serviceName: csi-attacher-cfsplugin
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: csi-attacher-cfsplugin
+    spec:
+      serviceAccount: csi-cfs-tencentcloud
+      containers:
+        - name: csi-attacher
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-attacher:0.3.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: cfs
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfs:0.3.0
+          args :
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://plugin/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /plugin
+      volumes:
+        - name: socket-dir
+          emptyDir:
+

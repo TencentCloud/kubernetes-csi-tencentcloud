@@ -1,0 +1,67 @@
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-provisioner-cfsplugin
+  labels:
+    app: csi-provisioner-cfsplugin
+spec:
+  selector:
+    app: csi-provisioner-cfsplugin
+  ports:
+    - name: dummy
+      port: 12346
+
+---
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: csi-provisioner-cfsplugin
+spec:
+  serviceName: csi-provisioner-cfsplugin
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: csi-provisioner-cfsplugin
+    spec:
+      serviceAccount: csi-cfs-tencentcloud
+      containers:
+        - name: csi-provisioner
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-provisioner:0.3.0
+          args:
+            - "--provisioner=com.tencent.cloud.csi.cfs"
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "-connection-timeout=120s"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: cfs
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfs:0.3.0
+          args :
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://plugin/csi.sock
+            - name: TENCENTCLOUD_API_SECRET_ID
+              value: AKIDxxxxxxxxxxxxxxxxxxx
+            - name: TENCENTCLOUD_API_SECRET_KEY
+              value: xxxxxxxxxxxxxxxxxxxxxxxx
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /plugin
+      volumes:
+        - name: socket-dir
+          emptyDir:
+
