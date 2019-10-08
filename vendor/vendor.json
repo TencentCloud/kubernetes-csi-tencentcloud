@@ -43,6 +43,12 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
+			"checksumSHA1": "t/sQ9OAykIvWiNL6sL994a2uEYo=",
+			"path": "github.com/golang/protobuf/descriptor",
+			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
+			"revisionTime": "2019-04-09T05:09:43Z"
+		},
+		{
 			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
@@ -128,6 +134,18 @@
 			"checksumSHA1": "3+yufQxPi9midybHlMOn0ohZshM=",
 			"path": "github.com/json-iterator/go",
 			"revision": ""
+		},
+		{
+			"checksumSHA1": "S98DAlt0/RzwqGmixxPYs6CaTGU=",
+			"path": "github.com/kubernetes-csi/csi-lib-utils/protosanitizer",
+			"revision": "0479e0e869953424bb5363441cac0eac2797b5ce",
+			"revisionTime": "2019-10-02T22:28:08Z"
+		},
+		{
+			"checksumSHA1": "KL7bJXvdQkz6APSf8pxSV01Zm0Y=",
+			"path": "github.com/kubernetes-csi/drivers/pkg/csi-common",
+			"revision": "337ec802362eb64fa9b6abd1a1b14ad997575d72",
+			"revisionTime": "2019-07-20T02:54:55Z"
 		},
 		{
 			"checksumSHA1": "fFKESyJ3FgvrYHQgDIIzwlNvFDk=",
