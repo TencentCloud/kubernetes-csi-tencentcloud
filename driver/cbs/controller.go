@@ -4,18 +4,19 @@ import (
 	"strconv"
 	"time"
 
+	"sync"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/golang/protobuf/ptypes"
-	"sync"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -86,14 +87,14 @@ var (
 	SnapshotNormal = "NORMAL"
 
 	cbsSnapshotsMapsCache = &cbsSnapshotsCache{
-		mux:      &sync.Mutex{},
+		mux:             &sync.Mutex{},
 		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
 	}
 )
 
 type cbsController struct {
-	cbsClient *cbs.Client
-	zone      string
+	cbsClient     *cbs.Client
+	zone          string
 	metadataStore util.CachePersister
 }
 
@@ -106,8 +107,8 @@ func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePer
 	}
 
 	return &cbsController{
-		cbsClient: client,
-		zone:      zone,
+		cbsClient:     client,
+		zone:          zone,
 		metadataStore: cachePersister,
 	}, nil
 }
@@ -560,7 +561,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 								SizeBytes:      cbsSnap.SizeBytes,
 								SnapshotId:     cbsSnap.SnapId,
 								SourceVolumeId: cbsSnap.SourceVolumeId,
-								CreationTime:   &timestamp.Timestamp{
+								CreationTime: &timestamp.Timestamp{
 									Seconds: cbsSnap.CreatedAt,
 								},
 								ReadyToUse: true,
@@ -574,7 +575,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 					SizeBytes:      cbsSnap.SizeBytes,
 					SnapshotId:     cbsSnap.SnapId,
 					SourceVolumeId: cbsSnap.SourceVolumeId,
-					CreationTime:   &timestamp.Timestamp{
+					CreationTime: &timestamp.Timestamp{
 						Seconds: cbsSnap.CreatedAt,
 					},
 					ReadyToUse: false,
@@ -606,11 +607,11 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}
 
 	cbsSnap := &cbsSnapshot{
-		SnapId: snapshotId,
-		SnapName: snapshotName,
+		SnapId:         snapshotId,
+		SnapName:       snapshotName,
 		SourceVolumeId: sourceVolumeId,
-		SizeBytes: int64(*listSnapshotResponse.Response.SnapshotSet[0].DiskSize),
-		CreatedAt: ptypes.TimestampNow().GetSeconds(),
+		SizeBytes:      int64(*listSnapshotResponse.Response.SnapshotSet[0].DiskSize),
+		CreatedAt:      ptypes.TimestampNow().GetSeconds(),
 	}
 
 	cbsSnapshotsMapsCache.add(snapshotId, cbsSnap)
