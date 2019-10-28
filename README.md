@@ -9,7 +9,9 @@
 | v1.10 | 0.3   |  release-0.3.0 |
 | v1.11 | 0.3   |  release-0.3.0 |
 | v1.12 | 0.3   |  release-0.3.0 |
-| v1.13+ | 1.0.0 | master        |
+| v1.13 | 1.0.0 | release-1.0.0  |
+| v1.14+ | 1.1.0 | master        |
+
 
 ## CBS CSI Plugin
 

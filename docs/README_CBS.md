@@ -6,11 +6,11 @@
 
 **Requirements:**
 
-* Kubernetes v1.13.x+
+* Kubernetes v1.14.x+
 * kube-apiserver and kubelet need `--allow-privileged=true`
-* kubelet configuration：`--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true`
-* apiserver/controller-manager configuration：:  `--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true`
-* scheduler configuration：: `--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true`
+* kubelet configuration：`--feature-gates=VolumeSnapshotDataSource=true`
+* apiserver/controller-manager configuration：:  `--feature-gates=VolumeSnapshotDataSource=true`
+* scheduler configuration：: `--feature-gates=VolumeSnapshotDataSource=true,VolumeScheduling=true`
 
 ### tencentcloud yunapi secret
 
@@ -25,13 +25,6 @@ data:
   # echo -n "<SECRET_ID>" | base64
   TENCENTCLOUD_CBS_API_SECRET_ID: "<SECRET_ID>"
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
-```
-
-### crd
-
-```yaml
-kubectl create -f  deploy/kubernetes/csinodeinfo.yaml
-kubectl create -f  deploy/kubernetes/csidriver.yaml
 ```
 
 ### rbac

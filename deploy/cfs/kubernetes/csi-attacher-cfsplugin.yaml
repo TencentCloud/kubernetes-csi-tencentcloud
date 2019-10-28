@@ -32,7 +32,7 @@ spec:
         - name: csi-attacher
           image: ccr.ccs.tencentyun.com/ccs-dev/csi-attacher:1.0.1
           args:
-            - "--v=5"
+            - "--v=3"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
