@@ -32,7 +32,7 @@ spec:
           args:
             - "--provisioner=com.tencent.cloud.csi.cfs"
             - "--csi-address=$(ADDRESS)"
-            - "--v=5"
+            - "--v=3"
             - "--connection-timeout=120s"
           env:
             - name: ADDRESS
