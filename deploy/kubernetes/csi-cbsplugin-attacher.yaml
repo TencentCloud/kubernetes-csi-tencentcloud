@@ -14,10 +14,13 @@ spec:
 
 ---
 kind: StatefulSet
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 metadata:
   name: csi-cbsplugin-attacher
 spec:
+  selector:
+    matchLabels:
+      app: csi-cbsplugin-attacher
   serviceName: "csi-cbsplugin-attacher"
   replicas: 1
   template:

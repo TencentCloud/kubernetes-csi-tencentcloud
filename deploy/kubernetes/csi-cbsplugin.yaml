@@ -1,6 +1,6 @@
 ---
 kind: DaemonSet
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 metadata:
   name: csi-tencentcloud
 spec:
@@ -49,7 +49,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:v1.0.0
+          image: ccr.ccs.tencentyun.com/chenyong/csi-tencentcloud-cbs:v1.1.0
           command:
           - "/csi-tencentcloud-cbs"
           args:
@@ -119,3 +119,5 @@ spec:
         - name: lib-modules
           hostPath:
             path: /lib/modules
+      imagePullSecrets:
+        - name: ccr-secret

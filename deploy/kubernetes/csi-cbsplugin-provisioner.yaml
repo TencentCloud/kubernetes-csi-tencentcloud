@@ -14,10 +14,13 @@ spec:
 
 ---
 kind: StatefulSet
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 metadata:
   name: csi-cbsplugin-provisioner
 spec:
+  selector:
+    matchLabels:
+      app: csi-cbsplugin-provisioner
   serviceName: "csi-cbsplugin-provisioner"
   replicas: 1
   template:

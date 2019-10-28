@@ -277,6 +277,10 @@ func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStats
 	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
 }
 
+func (node *cbsNode) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
+}
+
 func findCBSVolume(p string) (device string, err error) {
 	stat, err := os.Lstat(p)
 	if err != nil {
