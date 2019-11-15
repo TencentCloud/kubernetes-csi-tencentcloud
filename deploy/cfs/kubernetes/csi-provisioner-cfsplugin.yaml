@@ -28,7 +28,7 @@ spec:
       serviceAccount: csi-cfs-tencentcloud
       containers:
         - name: csi-provisioner
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-provisioner:1.0.1
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-provisioner:1.0.2
           args:
             - "--provisioner=com.tencent.cloud.csi.cfs"
             - "--csi-address=$(ADDRESS)"
