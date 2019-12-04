@@ -1,0 +1,25 @@
+FROM golang:1.12.7-stretch as builder
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+ADD . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o csi-cos cmd/cosfs/main.go 
+
+FROM phusion/baseimage:0.10.2
+LABEL maintainers="TencentCloud TKE Authors"
+LABEL description="TencentCloud COSFS CSI Plugin"
+# Use baseimage-docker's init system.
+CMD ["/sbin/my_init"]
+
+COPY build/cosfs/cosfs_1.0.12-ubuntu16.04_amd64.deb  /root/cosfs_1.0.12-ubuntu16.04_amd64.deb
+
+RUN apt update && apt install --no-install-recommends --no-install-suggests -y fuse libxml2 \
+    inetutils-tools iproute2 procps inetutils-ping net-tools telnet curl ca-certificates \
+    && dpkg -i /root/cosfs_1.0.12-ubuntu16.04_amd64.deb && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && rm /root/cosfs_1.0.12-ubuntu16.04_amd64.deb
+
+COPY build/cosfs/cos-csi.sh /etc/service/cos-csi/run
+COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-cos /bin/csi-cos
+RUN chmod +x /etc/service/cos-csi/run && chmod +x /bin/csi-cos && rm -fr /etc/service/sshd \
+    && rm -fr /etc/service/cron
+
+
+
