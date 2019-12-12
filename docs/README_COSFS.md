@@ -121,7 +121,7 @@ spec:
       bucket: "testbucket-1010101010"
       # You can specify any other options used by the cosfs command in here.
       #additional_args: "-oallow_other"
-    nodeStageSecretRef:
+    nodePublishSecretRef:
       # Replaced by the name and namespace of your secret.
       name: cos-secret
       namespace: kube-system

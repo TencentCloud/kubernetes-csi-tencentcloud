@@ -65,45 +65,7 @@ type cosfsOptions struct {
 }
 
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	if err := validateNodeStageVolumeRequest(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	volID := req.GetVolumeId()
-
-	// Extract options used by cosfs from VolumeAttributes.
-	options, err := parseCosfsOptions(req.GetVolumeAttributes())
-	if err != nil {
-		glog.Errorf("parse options from VolumeAttributes for %s failed: %v", volID, err)
-		return nil, status.Errorf(codes.InvalidArgument, "parse options failed: %v", err)
-	}
-
-	stagingTargetPath := req.GetStagingTargetPath()
-	// If the staging path is already a mount point, we suppose this volume has been already mounted.
-	isMnt, err := ns.createMountPoint(volID, stagingTargetPath)
-	if err != nil {
-		return nil, err
-	}
-	if isMnt {
-		glog.Infof("Volume %s is already mounted to %s, skipping", volID, stagingTargetPath)
-		return &csi.NodeStageVolumeResponse{}, nil
-	}
-
-	// Extract the tmp credential info from NodeStageSecrets and store to a unique tmp file.
-	credFilePath, err := ns.createCredentialFile(volID, options.Bucket, req.GetNodeStageSecrets())
-	if err != nil {
-		return nil, err
-	}
-
-	// Mount the cos bucket to staging path.
-	if err := ns.mounter.Mount(options, stagingTargetPath, credFilePath); err != nil {
-		glog.Errorf("Mount %s to %s failed: %v", volID, stagingTargetPath, err)
-		return nil, status.Errorf(codes.Internal, "mount failed: %v", err)
-	}
-
-	glog.Infof("successfully mounted volume %s to %s", volID, stagingTargetPath)
-
-	return &csi.NodeStageVolumeResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
@@ -114,7 +76,12 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volID := req.GetVolumeId()
 	targetPath := req.GetTargetPath()
 
-	// If the staging path is already a mount point, we suppose this volume has been already mounted.
+	options, err := parseCosfsOptions(req.GetVolumeAttributes())
+	if err != nil {
+		glog.Errorf("parse options from VolumeAttributes for %s failed: %v", volID, err)
+		return nil, status.Errorf(codes.InvalidArgument, "parse options failed: %v", err)
+	}
+	// use launcher
 	isMnt, err := ns.createMountPoint(volID, targetPath)
 	if err != nil {
 		return nil, err
@@ -124,12 +91,19 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
-	if err = ns.mounter.BindMount(req.GetStagingTargetPath(), req.GetTargetPath(), req.GetReadonly()); err != nil {
-		glog.Errorf("Failed to bind-mount volume %s: %v", volID, err)
-		return nil, status.Errorf(codes.Internal, "bind mount failed: %v", err)
+	// Extract the tmp credential info from NodeStageSecrets and store to a unique tmp file.
+	credFilePath, err := ns.createCredentialFile(volID, options.Bucket, req.GetNodePublishSecrets())
+	if err != nil {
+		return nil, err
 	}
 
-	glog.Infof("successfully bind-mounted volume %s to %s", volID, targetPath)
+	// use launcher
+	if err := ns.mounter.Mount(options, targetPath, credFilePath); err != nil {
+		glog.Errorf("Mount %s to %s failed: %v", volID, targetPath, err)
+		return nil, status.Errorf(codes.Internal, "mount failed: %v", err)
+	}
+
+	glog.Infof("successfully mounted volume %s to %s", volID, targetPath)
 
 	return &csi.NodePublishVolumeResponse{}, nil
 }
@@ -142,59 +116,19 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	volID := req.GetVolumeId()
 	targetPath := req.GetTargetPath()
 
-	// Unmount the bind-mount
+	// use launcher
 	if err := ns.mounter.Umount(targetPath); err != nil {
-		glog.Errorf("Failed to umount bind point %s for volume %s: %v", targetPath, volID, err)
+		glog.Errorf("Failed to umount point %s for volume %s: %v", targetPath, volID, err)
 		return nil, status.Errorf(codes.Internal, "umount failed: %v", err)
 	}
 
-	if err := ns.mounter.RemoveMountPoint(targetPath); err != nil {
-		glog.Errorf("Failed to remove bind point %s for volume %s: %v", targetPath, volID, err)
-		return nil, status.Errorf(codes.Internal, "remove mount point failed: %v", err)
-	}
-
-	glog.Infof("Successfully unbinded volume %s from %s", req.GetVolumeId(), targetPath)
+	glog.Infof("Successfully unmounted volume %s from %s", req.GetVolumeId(), targetPath)
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	if err := validateNodeUnstageVolumeRequest(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	volID := req.GetVolumeId()
-	stagingTargetPath := req.GetStagingTargetPath()
-
-	// Unmount the volume
-	if err := ns.mounter.Umount(stagingTargetPath); err != nil {
-		glog.Errorf("Failed to umount point %s for volume %s: %v", stagingTargetPath, volID, err)
-		return nil, status.Errorf(codes.Internal, "umount failed: %v", err)
-	}
-
-	if err := os.Remove(stagingTargetPath); err != nil {
-		glog.Errorf("Failed to remove point %s for volume %s: %v", stagingTargetPath, volID, err)
-		return nil, status.Errorf(codes.Internal, "remove mount point failed: %v", err)
-	}
-
-	glog.Infof("Successfully unmounted volume %s from %s", req.GetVolumeId(), stagingTargetPath)
-
-	return &csi.NodeUnstageVolumeResponse{}, nil
-}
-
-// NodeGetCapabilities returns the supported capabilities of the node server
-func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: []*csi.NodeServiceCapability{
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-					},
-				},
-			},
-		},
-	}, nil
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (ns *nodeServer) createMountPoint(volID, targetPath string) (bool, error) {
