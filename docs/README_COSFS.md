@@ -43,6 +43,12 @@ kubectl create -f deploy/cosfs/kubernetes/cosattacher.yaml
 
 Deploys stateful sets for external-attacher sidecar containers for COS CSI driver.
 
+**Deploy COS CSI launcher components:**
+
+```bash
+kubectl create -f deploy/cosfs/kubernetes/coslauncher.yaml
+```
+
 **Deploy COS CSI driver and related RBACs:**
 
 ```bash
