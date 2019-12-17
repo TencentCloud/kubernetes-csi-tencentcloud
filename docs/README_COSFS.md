@@ -111,7 +111,7 @@ spec:
   capacity:
     storage: 1Gi
   csi:
-    driver: csi-cosplugin
+    driver: com.tencent.cloud.csi.cosfs
     # Specify a unique volumeHandle like bucket name.(this value must different from other pv's volumeHandle)
     volumeHandle: xxx
     volumeAttributes:
