@@ -63,6 +63,12 @@
 			"revisionTime": "2018-07-15T08:23:32Z"
 		},
 		{
+			"checksumSHA1": "2Iy16w6c+4oMD8TtobbO0qsCrDo=",
+			"path": "github.com/gorilla/mux",
+			"revision": "d83b6ffe499a29cc05fc977988d0392851779620",
+			"revisionTime": "2019-07-01T20:26:33Z"
+		},
+		{
 			"checksumSHA1": "m74awbGDPva6wTPNGCOHtMMQt/M=",
 			"path": "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud",
 			"revision": "f456e9f52dfb910b641f49b635a8e31b1fb8a7e5",

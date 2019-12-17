@@ -17,9 +17,15 @@
 package cos
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -43,17 +49,11 @@ type defaultMounter struct {
 }
 
 func (*defaultMounter) Mount(options *cosfsOptions, mountPoint string, credentialFilePath string) error {
-	args := []string{
-		options.Bucket,
-		mountPoint,
-		"-ourl=" + options.URL,
-		"-odbglevel=" + options.DebugLevel,
-		"-opasswd_file=" + credentialFilePath,
+	if err := sendCmdToLauncher(options, mountPoint, credentialFilePath); err != nil {
+		return fmt.Errorf("failed to send mount command to launcher: %v", err)
 	}
-	if options.AdditionalArgs != "" {
-		args = append(args, options.AdditionalArgs)
-	}
-	return execCmd("cosfs", args...)
+
+	return nil
 }
 
 func (*defaultMounter) BindMount(from, to string, readOnly bool) error {
@@ -81,7 +81,40 @@ func (*defaultMounter) CreateMountPoint(point string) error {
 }
 
 func (*defaultMounter) Umount(point string) error {
-	return execCmd("umount", "-l", point)
+	httpClient := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", SocketPath)
+			},
+		},
+	}
+
+	args := []string{
+		"-l",
+		point,
+	}
+
+	body := make(map[string]string)
+	body["command"] = fmt.Sprintf("umount %s", strings.Join(args, " "))
+	bodyJson, _ := json.Marshal(body)
+	response, err := httpClient.Post("http://unix/launcher", "application/json", strings.NewReader(string(bodyJson)))
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("the response of launcher(action: umount) is: %v", string(respBody))
+	}
+
+	glog.Info("send umount command to launcher successfully")
+
+	return nil
 }
 
 func (*defaultMounter) RemoveMountPoint(point string) error {
@@ -95,5 +128,48 @@ func execCmd(cmd string, args ...string) error {
 		return fmt.Errorf("command %s failed: output %s, error: %v", cmd, string(output), err)
 	}
 	glog.V(4).Infof("command %s %v finished: %s", cmd, args, string(output))
+	return nil
+}
+
+func sendCmdToLauncher(options *cosfsOptions, mountPoint string, credentialFilePath string) error {
+	httpClient := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", SocketPath)
+			},
+		},
+	}
+
+	args := []string{
+		options.Bucket,
+		mountPoint,
+		"-ourl=" + options.URL,
+		"-odbglevel=" + options.DebugLevel,
+		"-opasswd_file=" + credentialFilePath,
+	}
+	if options.AdditionalArgs != "" {
+		args = append(args, options.AdditionalArgs)
+	}
+
+	body := make(map[string]string)
+	body["command"] = fmt.Sprintf("cosfs %s", strings.Join(args, " "))
+	bodyJson, _ := json.Marshal(body)
+	response, err := httpClient.Post("http://unix/launcher", "application/json", strings.NewReader(string(bodyJson)))
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("the response of launcher(action: cosfs) is: %v", string(respBody))
+	}
+
+	glog.Info("send cosfs command to launcher successfully")
+
 	return nil
 }

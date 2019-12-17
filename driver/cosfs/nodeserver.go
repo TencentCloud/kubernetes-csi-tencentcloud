@@ -20,10 +20,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
@@ -43,6 +47,7 @@ const (
 	secretKey                = "sec"
 	credentialID             = "SecretId"
 	credentialKey            = "SecretKey"
+	SocketPath               = "/tmp/cosfs.sock"
 )
 
 func newNodeServer(driver *csicommon.CSIDriver, mounter mounter) csi.NodeServer {
@@ -81,7 +86,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		glog.Errorf("parse options from VolumeAttributes for %s failed: %v", volID, err)
 		return nil, status.Errorf(codes.InvalidArgument, "parse options failed: %v", err)
 	}
-	// use launcher
+
 	isMnt, err := ns.createMountPoint(volID, targetPath)
 	if err != nil {
 		return nil, err
@@ -97,7 +102,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, err
 	}
 
-	// use launcher
 	if err := ns.mounter.Mount(options, targetPath, credFilePath); err != nil {
 		glog.Errorf("Mount %s to %s failed: %v", volID, targetPath, err)
 		return nil, status.Errorf(codes.Internal, "mount failed: %v", err)
@@ -132,18 +136,8 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 }
 
 func (ns *nodeServer) createMountPoint(volID, targetPath string) (bool, error) {
-	if err := ns.mounter.CreateMountPoint(targetPath); err != nil {
-		glog.Errorf("failed to create staging mount point at %s for volume %s: %v", targetPath, volID, err)
-		return false, status.Errorf(codes.Internal, "create staging mount point failed: %s", err)
-	}
-
-	// If the staging path is already a mount point, we suppose this volume has been already mounted.
-	isMnt, err := ns.mounter.IsMountPoint(targetPath)
-	if err != nil {
-		glog.Errorf("Stat %s for %s failed: %v", targetPath, volID, err)
-		return false, status.Errorf(codes.Internal, "failed to check whether staging point mounted or not: %v", err)
-	}
-	return isMnt, nil
+	glog.Infof("Creating staging mount point at %s for volume %s", targetPath, volID)
+	return launcherCreateMountPoint(targetPath)
 }
 
 func parseCosfsOptions(attributes map[string]string) (*cosfsOptions, error) {
@@ -217,4 +211,45 @@ func getSecretCredential(bucket string, secrets map[string]string) (string, erro
 	skey := strings.TrimSpace(secrets[credentialKey])
 	cosbucket := strings.TrimSpace(bucket)
 	return strings.Join([]string{cosbucket, sid, skey}, ":"), nil
+}
+
+func launcherCreateMountPoint(targetPath string) (bool, error) {
+	httpClient := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", SocketPath)
+			},
+		},
+	}
+
+	body := make(map[string]string)
+	body["stagingPath"] = targetPath
+	bodyJson, _ := json.Marshal(body)
+	response, err := httpClient.Post("http://unix/mount", "application/json", strings.NewReader(string(bodyJson)))
+	if err != nil {
+		return false, err
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("the response of launcher mount is: %v", response.Body)
+	}
+
+	defer response.Body.Close()
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return false, err
+	}
+	var result map[string]string
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		glog.Errorf("Unmarshal the response body of unix/mount failed. %v", err)
+		return false, err
+	}
+
+	isMounted, err := strconv.ParseBool(result["isMounted"])
+	if err != nil {
+		glog.Errorf("parse the value of `isMounted` from string to boolean failed. %v", err)
+		return false, err
+	}
+
+	return isMounted, nil
 }
