@@ -96,4 +96,5 @@ spec:
             type: DirectoryOrCreate
         - name: launcher-socket-dir
           hostPath:
-            path: /tmp/csi-cos
+            path: /etc/csi-cos
+            type: DirectoryOrCreate

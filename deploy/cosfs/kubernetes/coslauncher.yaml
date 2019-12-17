@@ -79,7 +79,8 @@ spec:
       volumes:
       - name: launcher-socket-dir
         hostPath:
-          path: /tmp/csi-cos
+          path: /etc/csi-cos
+          type: DirectoryOrCreate
       - name: pods-mount-dir
         hostPath:
           path: /var/lib/kubelet/pods
