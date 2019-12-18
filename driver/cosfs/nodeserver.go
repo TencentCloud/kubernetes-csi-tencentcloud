@@ -230,13 +230,12 @@ func launcherCreateMountPoint(targetPath string) (bool, error) {
 		return false, err
 	}
 
-	glog.Infof("http://unix/mount response is %v", response)
-
 	defer response.Body.Close()
 	respBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return false, err
 	}
+
 	if response.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("the response of launcher mount is: %v", string(respBody))
 	}

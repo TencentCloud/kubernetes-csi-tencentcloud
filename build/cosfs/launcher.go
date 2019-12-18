@@ -76,6 +76,7 @@ func launcherHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		extraFields["errmsg"] = "read request body failed"
+		glog.Errorf("%s: %v", extraFields["errmsg"], err)
 		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
 		return
 	}
@@ -83,6 +84,7 @@ func launcherHandler(w http.ResponseWriter, r *http.Request) {
 	var bodyMap map[string]string
 	if err := json.Unmarshal(body, &bodyMap); err != nil {
 		extraFields["errmsg"] = "unmarshal request body failed"
+		glog.Errorf("%s: %v\n", extraFields["errmsg"], err)
 		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
 		return
 	}
@@ -90,12 +92,14 @@ func launcherHandler(w http.ResponseWriter, r *http.Request) {
 	cmd, ok := bodyMap["command"]
 	if !ok {
 		extraFields["errmsg"] = "request body is empty. we need field `command`"
+		glog.Errorln(extraFields["errmsg"])
 		generateHttpResponse(w, "failure", http.StatusBadRequest, extraFields)
 		return
 	}
 
 	if err := execCmd(cmd); err != nil {
 		extraFields["errmsg"] = fmt.Sprintf("exec command(%s) failed. %v", cmd, err)
+		glog.Errorln(extraFields["errmsg"])
 		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
 		return
 	}
@@ -112,6 +116,7 @@ func mountHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		extraFields["errmsg"] = "read request body failed"
+		glog.Errorf("%s: %v", extraFields["errmsg"], err)
 		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
 		return
 	}
@@ -119,6 +124,7 @@ func mountHandler(w http.ResponseWriter, r *http.Request) {
 	var bodyMap map[string]string
 	if err := json.Unmarshal(body, &bodyMap); err != nil {
 		extraFields["errmsg"] = "unmarshal request body failed"
+		glog.Errorf("%s: %v", extraFields["errmsg"], err)
 		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
 		return
 	}
@@ -126,6 +132,7 @@ func mountHandler(w http.ResponseWriter, r *http.Request) {
 	stagingPath, ok := bodyMap["stagingPath"]
 	if !ok {
 		extraFields["errmsg"] = "request body is empty. we need field `staingPath`"
+		glog.Errorln(extraFields["errmsg"])
 		generateHttpResponse(w, "fail", http.StatusBadRequest, extraFields)
 		return
 	}
@@ -143,6 +150,7 @@ func mountHandler(w http.ResponseWriter, r *http.Request) {
 	isMounted, err := isMountPoint(stagingPath)
 	if err != nil {
 		extraFields["errmsg"] = fmt.Sprintf("failed to check whether staging point mounted or not: %v", err)
+		glog.Errorln(extraFields["errmsg"])
 		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
 		return
 	}
