@@ -116,6 +116,12 @@
 			"revision": ""
 		},
 		{
+			"checksumSHA1": "oUtU1Z0YIhbjb+bfYSkzlim9FD4=",
+			"path": "github.com/gorilla/mux",
+			"revision": "49c01487a141b49f8ffe06277f3dca3ee80a55fa",
+			"revisionTime": "2019-11-21T17:05:00Z"
+		},
+		{
 			"checksumSHA1": "OpoWx2pm9JdQCAOtFivsqfJ2hYo=",
 			"path": "github.com/gregjones/httpcache",
 			"revision": ""

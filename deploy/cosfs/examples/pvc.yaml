@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: pvc-cos
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  # You can specify the pv name manually or just let kubernetes to bind the pv and pvc.
+  # volumeName: pv-cos
+  # Currently cos only supports static provisioning, the StorageClass name should be empty.
+  storageClassName: ""
