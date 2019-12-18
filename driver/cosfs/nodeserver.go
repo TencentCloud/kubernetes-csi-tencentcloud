@@ -230,15 +230,16 @@ func launcherCreateMountPoint(targetPath string) (bool, error) {
 		return false, err
 	}
 
-	if response.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("the response of launcher mount is: %v", response.Body)
-	}
-
 	defer response.Body.Close()
 	respBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return false, err
 	}
+
+	if response.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("the response of launcher mount is: %v", response.Body)
+	}
+
 	var result map[string]string
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		glog.Errorf("Unmarshal the response body of unix/mount failed. %v", err)
