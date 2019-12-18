@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+    name: pod-cos
+spec:
+  containers:
+  - name: pod-cos
+    command: ["tail", "-f", "/etc/hosts"]
+    image: "centos:latest"
+    volumeMounts:
+    - mountPath: /data
+      name: cos
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "0.1"
+  volumes:
+  - name: cos
+    persistentVolumeClaim:
+      # Replaced by your pvc name.
+      claimName: pvc-cos
