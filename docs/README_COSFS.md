@@ -10,6 +10,9 @@ Building Docker image:
 
 ```bash
 docker build --network host -t yourimagename -f Dockerfile.cosfs .
+
+# launcher is a component which launch cosfs
+docker build --network host -t yourimagename -f Dockerfile.launcher .
 ```
 
 ## Configuration
