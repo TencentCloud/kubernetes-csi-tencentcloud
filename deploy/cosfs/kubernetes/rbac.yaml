@@ -28,7 +28,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: csi-cos-tencentcloud
-  namespace: kube-system
+    namespace: kube-system
 roleRef:
   kind: ClusterRole
   name: csi-cos-tencentcloud
