@@ -13,12 +13,15 @@
 
 ## CBS CSI Plugin
 
-CBS provides elastic, efficient and reliable data storage. And it can be attached to one node at the same time. More detail please look at
-docs/README_CBS.md.
+CBS provides elastic, efficient and reliable data storage. And it can be attached to one node at the same time. More detail please read [document](/docs/README_CBS.md).
 
 ## CFS CSI Plugin
 
-Cloud File Storage (CFS) is a secure and scalable file sharing and storage solution. And it can be mount by multi nodes at the same time. More detail please look at docs/README_CFS.md.
+Cloud File Storage (CFS) is a secure and scalable file sharing and storage solution. And it can be mount by multi nodes at the same time. More detail please read [document](/docs/README_CFS.md).
+
+## COSFS CSI Plugin
+
+COSFS is a FUSE filesystem application backed by Tencent Cloud Object Storage(COS). COSFS will mount an COS bucket (that has been properly formatted) as a local file system. More detail please read [document](/docs/README_COSFS.md).
 
 ## Contributing
 
