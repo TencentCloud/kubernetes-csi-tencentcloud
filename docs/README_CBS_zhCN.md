@@ -7,7 +7,7 @@
 **前置要求:**
 
 * Kubernetes v1.13.x及以上
-* kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true
+* kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true (针对 v1.15.x 及以上版本, kubelet 默认设置 `--allow-privileged` 为 true )
 * 所有节点的kubelet 需要添加的启动项为：--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
 * apiserver/controller-manager:  --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
 * scheduler: --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
