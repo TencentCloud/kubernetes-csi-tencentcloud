@@ -7,7 +7,7 @@
 **Requirements:**
 
 * Kubernetes v1.14.x+
-* kube-apiserver and kubelet need `--allow-privileged=true`
+* kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true)
 * kubelet configuration：`--feature-gates=VolumeSnapshotDataSource=true`
 * apiserver/controller-manager configuration：:  `--feature-gates=VolumeSnapshotDataSource=true`
 * scheduler configuration：: `--feature-gates=VolumeSnapshotDataSource=true,VolumeScheduling=true`
