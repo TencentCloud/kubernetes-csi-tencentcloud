@@ -34,7 +34,7 @@ If you want use cos csi plugin in Kubernetes 1.12, you should update your kubele
 --feature-gates=KubeletPluginsWatcher=false
 ```
 
-Your Kubernetes cluster must allow privileged pods (i.e. `--allow-privileged` flag must be set to true for both the API server and the kubelet). Moreover, as stated in the [mount propagation docs](https://kubernetes.io/docs/concepts/storage/volumes/#mount-propagation), the Docker daemon of the cluster nodes must allow shared mounts.
+Your Kubernetes cluster must allow privileged pods (i.e. `--allow-privileged` flag must be set to true for both the API server and the kubelet, and for v1.15.x+, kubelet defaults to set `--allow-privileged` to true). Moreover, as stated in the [mount propagation docs](https://kubernetes.io/docs/concepts/storage/volumes/#mount-propagation), the Docker daemon of the cluster nodes must allow shared mounts.
 
 YAML manifests are located in [deploy/cosfs/kubernetes](/deploy/cosfs/kubernetes). Those manifests deploy service accounts, cluster roles and cluster role bindings.
 

@@ -7,7 +7,7 @@
 **Requirements:**
 
 * Kubernetes v1.13.x+
-* kube-apiserver and kubelet need `--allow-privileged=true`
+* kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true)
 * feature gates`CSINodeInfo=true,CSIDriverRegistry=true`
 
 ### tencentcloud yunapi secret
