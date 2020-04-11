@@ -10,6 +10,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
+
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
@@ -90,7 +91,6 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 			}
 		}
 	}
-
 
 	listener, err := net.Listen(endpoint.Scheme, path.Join(endpoint.Host, endpoint.Path))
 	if err != nil {
