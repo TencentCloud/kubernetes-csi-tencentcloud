@@ -7,25 +7,26 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/kubernetes/pkg/util/mount"
+	testingexec "k8s.io/utils/exec/testing"
+	"k8s.io/utils/mount"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 func newFakeMounter() *mount.FakeMounter {
 	return &mount.FakeMounter{
 		MountPoints: []mount.MountPoint{},
-		Log:         []mount.FakeAction{},
 	}
 }
 
 func newFakeSafeFormatAndMounter(fakeMounter *mount.FakeMounter) mount.SafeFormatAndMount {
+	fakeExec := &testingexec.FakeExec{ExactOrder: true}
 	return mount.SafeFormatAndMount{
 		Interface: fakeMounter,
-		Exec:      mount.NewFakeExec(nil),
+		Exec:      fakeExec,
 	}
-
 }
 
 func newFakeCBSNode() *cbsNode {
@@ -79,11 +80,7 @@ func TestNodeStageVolume(t *testing.T) {
 				VolumeCapability:  stdVolCap,
 				VolumeId:          "disk-test",
 			},
-			fakeMounter: &mount.FakeMounter{
-				Filesystem: map[string]mount.FileType{
-					fakeDevicePath: mount.FileTypeFile,
-				},
-			},
+			fakeMounter: &mount.FakeMounter{},
 			expActions: []mount.FakeAction{
 				{
 					Action: "mount",
@@ -117,11 +114,7 @@ func TestNodeStageVolume(t *testing.T) {
 				},
 				VolumeId: "disk-test",
 			},
-			fakeMounter: &mount.FakeMounter{
-				Filesystem: map[string]mount.FileType{
-					fakeDevicePath: mount.FileTypeFile,
-				},
-			},
+			fakeMounter: &mount.FakeMounter{},
 			expActions: []mount.FakeAction{
 				{
 					Action: "mount",
@@ -180,9 +173,6 @@ func TestNodeStageVolume(t *testing.T) {
 						Path:   "/test/path",
 					},
 				},
-				Filesystem: map[string]mount.FileType{
-					fakeDevicePath: mount.FileTypeFile,
-				},
 			},
 			expActions: []mount.FakeAction{},
 			expMountPoints: []mount.MountPoint{
@@ -211,8 +201,9 @@ func TestNodeStageVolume(t *testing.T) {
 				t.Fatalf("Expected error %v, got no error", tc.expErrCode)
 			}
 
-			if len(tc.fakeMounter.Log) > 0 && !reflect.DeepEqual(tc.fakeMounter.Log, tc.expActions) {
-				t.Fatalf("Expected actions {%+v}, got {%+v}", tc.expActions, tc.fakeMounter.Log)
+			tcFakeMounterLog := tc.fakeMounter.GetLog()
+			if len(tcFakeMounterLog) > 0 && !reflect.DeepEqual(tcFakeMounterLog, tc.expActions) {
+				t.Fatalf("Expected actions {%+v}, got {%+v}", tc.expActions, tcFakeMounterLog)
 			}
 			if len(tc.fakeMounter.MountPoints) > 0 && !reflect.DeepEqual(tc.fakeMounter.MountPoints, tc.expMountPoints) {
 				t.Fatalf("Expected mount points {%+v}, got {%+v}", tc.expMountPoints, tc.fakeMounter.MountPoints)
@@ -310,8 +301,9 @@ func TestNodeUnstageVolume(t *testing.T) {
 			}
 			// if fake mounter did anything we should
 			// check if it was expected
-			if len(fakeMounter.Log) > 0 && !reflect.DeepEqual(fakeMounter.Log, tc.expActions) {
-				t.Fatalf("Expected actions {%+v}, got {%+v}", tc.expActions, fakeMounter.Log)
+			tcFakeMounterLog := fakeMounter.GetLog()
+			if len(tcFakeMounterLog) > 0 && !reflect.DeepEqual(tcFakeMounterLog, tc.expActions) {
+				t.Fatalf("Expected actions {%+v}, got {%+v}", tc.expActions, tcFakeMounterLog)
 			}
 			if len(fakeMounter.MountPoints) > 0 && !reflect.DeepEqual(fakeMounter.MountPoints, tc.expMountPoints) {
 				t.Fatalf("Expected mount points {%+v}, got {%+v}", tc.expMountPoints, fakeMounter.MountPoints)

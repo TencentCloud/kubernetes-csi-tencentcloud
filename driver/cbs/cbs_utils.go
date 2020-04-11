@@ -6,26 +6,26 @@ import (
 )
 
 type cbsSnapshot struct {
-	SourceVolumeId     string `json:"sourceVolumeId"`
-	SnapName           string `json:"snapName"`
-	SnapId             string `json:"sanpId"`
-	CreatedAt          int64  `json:"createdAt"`
-	SizeBytes          int64  `json:"sizeBytes"`
+	SourceVolumeId string `json:"sourceVolumeId"`
+	SnapName       string `json:"snapName"`
+	SnapId         string `json:"sanpId"`
+	CreatedAt      int64  `json:"createdAt"`
+	SizeBytes      int64  `json:"sizeBytes"`
 }
 
 type cbsSnapshotsCache struct {
-	mux      *sync.Mutex
+	mux             *sync.Mutex
 	cbsSnapshotMaps map[string]*cbsSnapshot
 }
 
-func (cache *cbsSnapshotsCache) add(id string, cbsSnap *cbsSnapshot){
+func (cache *cbsSnapshotsCache) add(id string, cbsSnap *cbsSnapshot) {
 	cache.mux.Lock()
 	defer cache.mux.Unlock()
 
 	cache.cbsSnapshotMaps[id] = cbsSnap
 }
 
-func (cache *cbsSnapshotsCache) delete(id string){
+func (cache *cbsSnapshotsCache) delete(id string) {
 	cache.mux.Lock()
 	defer cache.mux.Unlock()
 
@@ -43,5 +43,3 @@ func getCbsSnapshotByName(snapName string) (*cbsSnapshot, error) {
 	}
 	return nil, fmt.Errorf("snapshot name %s does not exit in the snapshots list", snapName)
 }
-
-

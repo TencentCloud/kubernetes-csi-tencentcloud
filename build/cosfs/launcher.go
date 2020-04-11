@@ -15,7 +15,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/mount"
 )
 
 const (

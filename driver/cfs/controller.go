@@ -9,13 +9,13 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cfsv3 "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	v3common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -203,6 +203,10 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
+}
+
+func (cs *controllerServer) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func updateCfsClent(client *cfsv3.Client) *cfsv3.Client {

@@ -135,6 +135,10 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
+func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
+}
+
 func (ns *nodeServer) createMountPoint(volID, targetPath string) (bool, error) {
 	glog.Infof("Creating staging mount point at %s for volume %s", targetPath, volID)
 	return launcherCreateMountPoint(targetPath)

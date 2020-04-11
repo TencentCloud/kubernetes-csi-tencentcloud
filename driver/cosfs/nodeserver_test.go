@@ -6,22 +6,22 @@ import (
 	"testing"
 
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
-	"k8s.io/kubernetes/pkg/util/mount"
+	testingexec "k8s.io/utils/exec/testing"
+	"k8s.io/utils/mount"
 )
 
 func newFakeMounter() *mount.FakeMounter {
 	return &mount.FakeMounter{
 		MountPoints: []mount.MountPoint{},
-		Log:         []mount.FakeAction{},
 	}
 }
 
 func newFakeSafeFormatAndMounter(fakeMounter *mount.FakeMounter) mount.SafeFormatAndMount {
+	fakeExec := &testingexec.FakeExec{ExactOrder: true}
 	return mount.SafeFormatAndMount{
 		Interface: fakeMounter,
-		Exec:      mount.NewFakeExec(nil),
+		Exec:      fakeExec,
 	}
-
 }
 
 func newFakeNode() *nodeServer {
