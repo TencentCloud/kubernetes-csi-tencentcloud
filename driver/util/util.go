@@ -6,7 +6,7 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/mount"
 )
 
 const (
@@ -45,7 +45,7 @@ func doCleanupMountPoint(mountPath string, mounter mount.Interface, extensiveMou
 		var notMnt bool
 		var err error
 		if extensiveMountPointCheck {
-			notMnt, err = mounter.IsNotMountPoint(mountPath)
+			notMnt, err = mount.IsNotMountPoint(mounter, mountPath)
 		} else {
 			notMnt, err = mounter.IsLikelyNotMountPoint(mountPath)
 		}

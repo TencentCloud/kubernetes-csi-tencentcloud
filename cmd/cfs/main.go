@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cfs"
-
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cfs"
 )
 
 const (

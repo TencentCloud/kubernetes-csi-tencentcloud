@@ -3,13 +3,15 @@ package metadata
 import (
 	"errors"
 	"fmt"
-	. "github.com/dbdd4us/qcloudapi-sdk-go/util"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+
+	"github.com/dbdd4us/qcloudapi-sdk-go/util"
 )
 
 type Request struct {
@@ -25,6 +27,18 @@ const (
 	REGION       = "placement/region"
 	ZONE         = "placement/zone"
 	PUBLIC_IPV4  = "public-ipv4"
+
+	ENI_MACS         = "network/interfaces/macs"
+	ENI_PRIMARY_IPV4 = "network/interfaces/macs/%s/primary-local-ipv4"
+
+	ENI_IPV4S                 = "network/interfaces/macs/%s/local-ipv4s"
+	ENI_IPV4_GATEWAY          = "network/interfaces/macs/%s/local-ipv4s/%s/gateway"
+	ENI_IPV4_PUBLIC_IPV4      = "network/interfaces/macs/%s/local-ipv4s/%s/public-ipv4"
+	ENI_IPV4_PUBLIC_IPV4_MODE = "network/interfaces/macs/%s/local-ipv4s/%s/public-ipv4-mode"
+	ENI_IPV4_SUBNET_MASK      = "network/interfaces/macs/%s/local-ipv4s/%s/subnet-mask"
+
+	NEWLINE_CHAR = "\n"
+	DIR_SEQ      = "/"
 )
 
 type IMetaDataClient interface {
@@ -154,7 +168,7 @@ func (m *MetaDataClient) send() (string, error) {
 
 }
 
-var retry = AttemptStrategy{
+var retry = util.AttemptStrategy{
 	Min:   5,
 	Total: 5 * time.Second,
 	Delay: 200 * time.Millisecond,
@@ -212,4 +226,101 @@ func shouldRetry(err error) bool {
 		}
 	}
 	return false
+}
+
+func (m *MetaData) EniPrimaryIpv4(mac string) (string, error) {
+
+	if mac == "" {
+		return "", fmt.Errorf("empty eni mac")
+	}
+
+	ip, err := m.c.Resource(fmt.Sprintf(ENI_PRIMARY_IPV4, mac)).Go()
+	if err != nil {
+		return "", err
+	}
+	return ip, nil
+}
+
+func (m *MetaData) EniIpv4GateWay(mac, ip string) (string, error) {
+
+	if mac == "" || ip == "" {
+		return "", fmt.Errorf("empty eni mac or ip")
+	}
+
+	gw, err := m.c.Resource(fmt.Sprintf(ENI_IPV4_GATEWAY, mac, ip)).Go()
+	if err != nil {
+		return "", err
+	}
+	return gw, nil
+}
+
+func (m *MetaData) EniIpv4PublicIpv4(mac, ip string) (string, error) {
+
+	if mac == "" || ip == "" {
+		return "", fmt.Errorf("empty eni mac or ip")
+	}
+
+	pip, err := m.c.Resource(fmt.Sprintf(ENI_IPV4_PUBLIC_IPV4, mac, ip)).Go()
+	if err != nil {
+		return "", err
+	}
+	return pip, nil
+}
+
+// mode ---> EIP/NAT
+func (m *MetaData) EniIpv4PublicIpv4Mode(mac, ip string) (string, error) {
+
+	if mac == "" || ip == "" {
+		return "", fmt.Errorf("empty eni mac or ip")
+	}
+
+	mode, err := m.c.Resource(fmt.Sprintf(ENI_IPV4_PUBLIC_IPV4_MODE, mac, ip)).Go()
+	if err != nil {
+		return "", err
+	}
+	return mode, nil
+}
+
+// mask ---> 255.255.0.0
+func (m *MetaData) EniIpv4SubnetMask(mac, ip string) (string, error) {
+
+	if mac == "" || ip == "" {
+		return "", fmt.Errorf("empty eni mac or ip")
+	}
+
+	mask, err := m.c.Resource(fmt.Sprintf(ENI_IPV4_SUBNET_MASK, mac, ip)).Go()
+	if err != nil {
+		return "", err
+	}
+	return mask, nil
+}
+
+func convertResourceList(str string) []string {
+	resDirList := strings.Split(str, NEWLINE_CHAR)
+	resList := make([]string, 0, len(resDirList))
+	for _, resDir := range resDirList {
+		resList = append(resList, strings.TrimRight(resDir, DIR_SEQ))
+	}
+	return resList
+}
+
+func (m *MetaData) EniMacs() ([]string, error) {
+
+	macs, err := m.c.Resource(ENI_MACS).Go()
+	if err != nil {
+		return nil, err
+	}
+
+	macList := convertResourceList(macs)
+	return macList, nil
+}
+
+func (m *MetaData) EniIpv4List(mac string) ([]string, error) {
+	ips, err := m.c.Resource(fmt.Sprintf(ENI_IPV4S, mac)).Go()
+	if err != nil {
+		return nil, err
+	}
+
+	ipList := convertResourceList(ips)
+	return ipList, nil
 }
