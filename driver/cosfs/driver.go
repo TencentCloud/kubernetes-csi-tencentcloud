@@ -38,7 +38,7 @@ func NewDriver(driverName, nodeID string) Driver {
 	return &driver{
 		nodeServer:       newNodeServer(csiDriver, newMounter()),
 		identityServer:   csicommon.NewDefaultIdentityServer(csiDriver),
-		controllerServer: csicommon.NewDefaultControllerServer(csiDriver),
+		controllerServer: newControllerServer(csiDriver),
 	}
 }
 

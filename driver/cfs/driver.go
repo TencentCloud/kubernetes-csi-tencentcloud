@@ -23,7 +23,7 @@ import (
 	cfsv3 "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719"
 	v3common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	v3profile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/mount"
 )
 
 type driver struct {

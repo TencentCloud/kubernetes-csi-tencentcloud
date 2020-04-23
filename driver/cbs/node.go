@@ -10,19 +10,22 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/exec"
+	"k8s.io/utils/mount"
+
+	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
-	DiskByIdDevicePath       = "/dev/disk/by-id"
-	DiskByIdDeviceNamePrefix = "virtio-"
+	DiskByIDDevicePath       = "/dev/disk/by-id"
+	DiskByIDDeviceNamePrefix = "virtio-"
 
 	MaxAttachVolumePerNode = 20
 
@@ -50,7 +53,7 @@ func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
 		cbsClient:      client,
 		mounter: mount.SafeFormatAndMount{
 			Interface: mount.New(""),
-			Exec:      mount.NewOsExec(),
+			Exec:      exec.New(),
 		},
 		idempotent: util.NewIdempotent(),
 	}
@@ -85,7 +88,7 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		node.idempotent.Delete(req)
 	}()
 
-	diskId := req.VolumeId
+	diskID := req.VolumeId
 
 	stagingTargetPath := req.StagingTargetPath
 
@@ -104,7 +107,7 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	}
 
 	//2. check target path mounted
-	cbsDisk := filepath.Join(DiskByIdDevicePath, DiskByIdDeviceNamePrefix+diskId)
+	cbsDisk := filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID)
 	diskSource, err := findCBSVolume(cbsDisk)
 	if err != nil {
 		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", cbsDisk, err)
@@ -117,7 +120,7 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if diskSource == device {
-		glog.Infof("NodeStageVolume: volume %v already staged", diskId)
+		glog.Infof("NodeStageVolume: volume %v already staged", diskID)
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
@@ -247,7 +250,7 @@ func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 }
 
 func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	nodeId, err := node.metadataClient.InstanceID()
+	nodeID, err := node.metadataClient.InstanceID()
 	if err != nil {
 		glog.Errorf("NodeGetInfo node.metadataClient.InstanceID() error: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -260,7 +263,7 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 	}
 
 	return &csi.NodeGetInfoResponse{
-		NodeId:            nodeId,
+		NodeId:            nodeID,
 		MaxVolumesPerNode: int64(MaxAttachVolumePerNode),
 
 		// make sure that the driver works on this particular zone only
@@ -275,6 +278,10 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 // TODO implement
 func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
+}
+
+func (node *cbsNode) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
 }
 
 func findCBSVolume(p string) (device string, err error) {

@@ -23,14 +23,13 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-	"k8s.io/kubernetes/pkg/util/mount"
-
+	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/utils/mount"
 
-	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 type nodeServer struct {
@@ -177,4 +176,8 @@ func (ns *nodeServer) NodeUnstageVolume(
 	req *csi.NodeUnstageVolumeRequest) (
 	*csi.NodeUnstageVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (ns *nodeServer) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
 }

@@ -455,6 +455,31 @@ func (c *Client) DescribeSnapshotOperationLogs(request *DescribeSnapshotOperatio
     return
 }
 
+func NewDescribeSnapshotSharePermissionRequest() (request *DescribeSnapshotSharePermissionRequest) {
+    request = &DescribeSnapshotSharePermissionRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "DescribeSnapshotSharePermission")
+    return
+}
+
+func NewDescribeSnapshotSharePermissionResponse() (response *DescribeSnapshotSharePermissionResponse) {
+    response = &DescribeSnapshotSharePermissionResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 本接口（DescribeSnapshotSharePermission）用于查询快照的分享信息。
+func (c *Client) DescribeSnapshotSharePermission(request *DescribeSnapshotSharePermissionRequest) (response *DescribeSnapshotSharePermissionResponse, err error) {
+    if request == nil {
+        request = NewDescribeSnapshotSharePermissionRequest()
+    }
+    response = NewDescribeSnapshotSharePermissionResponse()
+    err = c.Send(request, response)
+    return
+}
+
 func NewDescribeSnapshotsRequest() (request *DescribeSnapshotsRequest) {
     request = &DescribeSnapshotsRequest{
         BaseRequest: &tchttp.BaseRequest{},
@@ -507,6 +532,31 @@ func (c *Client) DetachDisks(request *DetachDisksRequest) (response *DetachDisks
         request = NewDetachDisksRequest()
     }
     response = NewDetachDisksResponse()
+    err = c.Send(request, response)
+    return
+}
+
+func NewGetSnapOverviewRequest() (request *GetSnapOverviewRequest) {
+    request = &GetSnapOverviewRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "GetSnapOverview")
+    return
+}
+
+func NewGetSnapOverviewResponse() (response *GetSnapOverviewResponse) {
+    response = &GetSnapOverviewResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 获取快照概览信息
+func (c *Client) GetSnapOverview(request *GetSnapOverviewRequest) (response *GetSnapOverviewResponse, err error) {
+    if request == nil {
+        request = NewGetSnapOverviewRequest()
+    }
+    response = NewGetSnapOverviewResponse()
     err = c.Send(request, response)
     return
 }
@@ -594,6 +644,34 @@ func (c *Client) InquiryPriceResizeDisk(request *InquiryPriceResizeDiskRequest) 
     return
 }
 
+func NewModifyAutoSnapshotPolicyAttributeRequest() (request *ModifyAutoSnapshotPolicyAttributeRequest) {
+    request = &ModifyAutoSnapshotPolicyAttributeRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "ModifyAutoSnapshotPolicyAttribute")
+    return
+}
+
+func NewModifyAutoSnapshotPolicyAttributeResponse() (response *ModifyAutoSnapshotPolicyAttributeResponse) {
+    response = &ModifyAutoSnapshotPolicyAttributeResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 本接口（ModifyAutoSnapshotPolicyAttribute）用于修改定期快照策略属性。
+// 
+// * 可通过该接口修改定期快照策略的执行策略、名称、是否激活等属性。
+// * 修改保留天数时必须保证不与是否永久保留属性冲突，否则整个操作失败，以特定的错误码返回。
+func (c *Client) ModifyAutoSnapshotPolicyAttribute(request *ModifyAutoSnapshotPolicyAttributeRequest) (response *ModifyAutoSnapshotPolicyAttributeResponse, err error) {
+    if request == nil {
+        request = NewModifyAutoSnapshotPolicyAttributeRequest()
+    }
+    response = NewModifyAutoSnapshotPolicyAttributeResponse()
+    err = c.Send(request, response)
+    return
+}
+
 func NewModifyDiskAttributesRequest() (request *ModifyDiskAttributesRequest) {
     request = &ModifyDiskAttributesRequest{
         BaseRequest: &tchttp.BaseRequest{},
@@ -617,6 +695,37 @@ func (c *Client) ModifyDiskAttributes(request *ModifyDiskAttributesRequest) (res
         request = NewModifyDiskAttributesRequest()
     }
     response = NewModifyDiskAttributesResponse()
+    err = c.Send(request, response)
+    return
+}
+
+func NewModifyDisksChargeTypeRequest() (request *ModifyDisksChargeTypeRequest) {
+    request = &ModifyDisksChargeTypeRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "ModifyDisksChargeType")
+    return
+}
+
+func NewModifyDisksChargeTypeResponse() (response *ModifyDisksChargeTypeResponse) {
+    response = &ModifyDisksChargeTypeResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 接口请求域名： cbs.tencentcloudapi.com 。
+// 
+// 本接口 (ModifyDisksChargeType) 用于切换云盘的计费模式。
+// 
+// 只支持从 POSTPAID_BY_HOUR 计费模式切换为PREPAID计费模式。
+// 非弹性云盘不支持此接口，请通过修改实例计费模式接口将实例连同非弹性云盘一起转换。
+// 默认接口请求频率限制：10次/秒。
+func (c *Client) ModifyDisksChargeType(request *ModifyDisksChargeTypeRequest) (response *ModifyDisksChargeTypeResponse, err error) {
+    if request == nil {
+        request = NewModifyDisksChargeTypeRequest()
+    }
+    response = NewModifyDisksChargeTypeResponse()
     err = c.Send(request, response)
     return
 }
@@ -670,6 +779,37 @@ func (c *Client) ModifySnapshotAttribute(request *ModifySnapshotAttributeRequest
         request = NewModifySnapshotAttributeRequest()
     }
     response = NewModifySnapshotAttributeResponse()
+    err = c.Send(request, response)
+    return
+}
+
+func NewModifySnapshotsSharePermissionRequest() (request *ModifySnapshotsSharePermissionRequest) {
+    request = &ModifySnapshotsSharePermissionRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "ModifySnapshotsSharePermission")
+    return
+}
+
+func NewModifySnapshotsSharePermissionResponse() (response *ModifySnapshotsSharePermissionResponse) {
+    response = &ModifySnapshotsSharePermissionResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 本接口（ModifySnapshotsSharePermission）用于修改快照分享信息。
+// 
+// 分享快照后，被分享账户可以通过该快照创建云硬盘。
+// * 每个快照最多可分享给50个账户。
+// * 分享快照无法更改名称，描述，仅可用于创建云硬盘。
+// * 只支持分享到对方账户相同地域。
+// * 仅支持分享数据盘快照。
+func (c *Client) ModifySnapshotsSharePermission(request *ModifySnapshotsSharePermissionRequest) (response *ModifySnapshotsSharePermissionResponse, err error) {
+    if request == nil {
+        request = NewModifySnapshotsSharePermissionRequest()
+    }
+    response = NewModifySnapshotsSharePermissionResponse()
     err = c.Send(request, response)
     return
 }

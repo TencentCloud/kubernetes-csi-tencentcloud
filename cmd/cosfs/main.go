@@ -22,6 +22,7 @@ import (
 
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
+
 	cos "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cosfs"
 )
 
