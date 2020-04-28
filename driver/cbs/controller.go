@@ -198,6 +198,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	createCbsReq := cbs.NewCreateDisksRequest()
 
+	createCbsReq.DiskName = &volumeIdempotencyName
 	createCbsReq.ClientToken = &volumeIdempotencyName
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
