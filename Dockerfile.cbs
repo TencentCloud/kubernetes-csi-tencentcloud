@@ -1,0 +1,20 @@
+FROM golang:1.14.1-stretch as builder
+
+ADD . /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+
+RUN go build -v -o /go/src/bin/csi-tencentcloud cmd/cbs/main.go
+
+
+
+
+FROM centos:7.5.1804
+LABEL maintainers="TencentCloud TKE Authors"
+LABEL description="TencentCloud CBS CSI Plugin"
+
+RUN yum  install -y  e2fsprogs xfsprogs && yum clean all
+
+COPY --from=builder /go/src/bin/csi-tencentcloud /csi-tencentcloud-cbs
+RUN chmod +x /csi-tencentcloud-cbs
+CMD ["/csi-tencentcloud-cbs"]

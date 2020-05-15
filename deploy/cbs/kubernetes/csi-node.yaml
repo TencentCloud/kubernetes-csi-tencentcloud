@@ -2,17 +2,18 @@
 kind: DaemonSet
 apiVersion: apps/v1beta2
 metadata:
-  name: csi-tencentcloud
+  name: csi-cbsplugin-node
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
-      app: csi-tencentcloud
+      app: csi-cbsplugin-node
   template:
     metadata:
       labels:
-        app: csi-tencentcloud
+        app: csi-cbsplugin-node
     spec:
-      serviceAccount: csi-tencentcloud
+      serviceAccount: csi-node-sa
       hostNetwork: true
       hostPID: true
       # to use e.g. Rook orchestrated cluster, and mons' FQDN is
@@ -20,7 +21,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
           args:
             - "--v=5"
             - "--csi-address=/csi/csi.sock"
@@ -43,13 +44,13 @@ spec:
               mountPath: /csi
             - name: registration-dir
               mountPath: /registration
-        - name: csi-tencentcloud
+        - name: csi-cbsplugin-node
           securityContext:
             privileged: true
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/library/csi-tencentcloud-cbs:v1.0.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v1.2.0
           command:
           - "/csi-tencentcloud-cbs"
           args:
