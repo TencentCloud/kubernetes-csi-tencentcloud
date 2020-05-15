@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/kubernetes/pkg/util/resizefs"
 	"k8s.io/utils/exec"
 	"k8s.io/utils/mount"
 
@@ -31,6 +32,7 @@ var (
 
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+		csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 	}
 )
 
@@ -280,8 +282,30 @@ func (node *cbsNode) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStats
 	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
 }
 
-func (node *cbsNode) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
+func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	glog.Infof("NodeExpandVolume: NodeExpandVolumeRequest is %v", *req)
+
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+
+	args := []string{"-o", "source", "--noheadings", "--target", req.GetVolumePath()}
+	output, err := node.mounter.Exec.Command("findmnt", args...).Output()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not determine device path: %v, raw block device or unmounted", err)
+	}
+
+	devicePath := strings.TrimSpace(string(output))
+	if len(devicePath) == 0 {
+		return nil, status.Errorf(codes.Internal, "Could not get valid device for mount path: %v", req.GetVolumePath())
+	}
+	r := resizefs.NewResizeFs(&node.mounter)
+	if _, err := r.Resize(devicePath, req.GetVolumePath()); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not resize volume %s %s:  %v", volumeID, devicePath, err)
+	}
+
+	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
 func findCBSVolume(p string) (device string, err error) {
