@@ -68,6 +68,7 @@ var (
 	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
+	StatusExpanding  = "EXPANDING"
 
 	// volumeCaps represents how the volume could be accessed.
 	// It is SINGLE_NODE_WRITER since EBS volume could only be
@@ -83,6 +84,7 @@ var (
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 	}
 
 	SnapshotNormal = "NORMAL"
@@ -530,8 +532,84 @@ func (ctrl *cbsController) ListVolumes(context.Context, *csi.ListVolumesRequest)
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
-func (ctrl *cbsController) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	glog.Infof("ControllerExpandVolume: ControllerExpandVolumeRequest is %v", *req)
+
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+
+	capacityRange := req.GetCapacityRange()
+	if capacityRange == nil {
+		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
+	}
+
+	newCbsSizeGB := util.RoundUpGiB(capacityRange.GetRequiredBytes())
+
+	diskId := req.VolumeId
+
+	// check size
+	listCbsRequest := cbs.NewDescribeDisksRequest()
+	listCbsRequest.DiskIds = []*string{&diskId}
+
+	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if len(listCbsResponse.Response.DiskSet) <= 0 {
+		return nil, status.Errorf(codes.NotFound, "Disk %s not found", diskId)
+	}
+
+	for _, disk := range listCbsResponse.Response.DiskSet {
+		if *disk.DiskId == diskId {
+			if uint64(newCbsSizeGB) <= *disk.DiskSize {
+				glog.Infof("Request size %v is less than *disk.DiskSize %v", newCbsSizeGB, *disk.DiskSize)
+				return &csi.ControllerExpandVolumeResponse{
+					CapacityBytes:         util.GiBToBytes(int64(*disk.DiskSize)),
+					NodeExpansionRequired: true,
+				}, nil
+			}
+		}
+	}
+	//expand cbs
+	resizeRequest := cbs.NewResizeDiskRequest()
+	resizeRequest.DiskId = common.StringPtr(diskId)
+	resizeRequest.DiskSize = common.Uint64Ptr(uint64(newCbsSizeGB))
+
+	_, err = ctrl.cbsClient.ResizeDisk(resizeRequest)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	ticker := time.NewTicker(time.Second * 3)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	defer cancel()
+
+	for {
+		select {
+		case <-ticker.C:
+			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+			if err != nil {
+				glog.Infof("DescribeDisks failed %v", err)
+				continue
+			}
+			for _, d := range listCbsResponse.Response.DiskSet {
+				if *d.DiskId == diskId && d.DiskState != nil {
+					if *d.DiskState != StatusExpanding {
+						return &csi.ControllerExpandVolumeResponse{
+							CapacityBytes:         util.GiBToBytes(newCbsSizeGB),
+							NodeExpansionRequired: true,
+						}, nil
+					}
+				}
+			}
+		case <-ctx.Done():
+			return nil, status.Errorf(codes.DeadlineExceeded, "Cbs disk %s is not expanded before deadline exceeded", diskId)
+		}
+	}
 }
 
 func (ctrl *cbsController) GetCapacity(context.Context, *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
