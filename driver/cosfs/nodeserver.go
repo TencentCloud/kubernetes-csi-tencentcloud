@@ -65,6 +65,7 @@ type nodeServer struct {
 type cosfsOptions struct {
 	URL            string
 	Bucket         string
+	Path           string
 	DebugLevel     string
 	AdditionalArgs string
 }
@@ -148,6 +149,8 @@ func parseCosfsOptions(attributes map[string]string) (*cosfsOptions, error) {
 			options.URL = v
 		case "bucket":
 			options.Bucket = v
+		case "path":
+			options.Path = v
 		case "dbglevel":
 			options.DebugLevel = v
 		case "additional_args":
