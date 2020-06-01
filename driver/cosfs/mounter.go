@@ -140,8 +140,12 @@ func sendCmdToLauncher(options *cosfsOptions, mountPoint string, credentialFileP
 		},
 	}
 
+	bucketOrWithSubDir := options.Bucket
+	if options.Path != "" {
+		bucketOrWithSubDir = fmt.Sprintf("%s:%s", options.Bucket, options.Path)
+	}
 	args := []string{
-		options.Bucket,
+		bucketOrWithSubDir,
 		mountPoint,
 		"-ourl=" + options.URL,
 		"-odbglevel=" + options.DebugLevel,
