@@ -2,6 +2,11 @@
 
 `kubernetes-csi-tencentloud` CFS plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator use Tencent [Cloud File Storage](https://cloud.tencent.com/product/cfs).
 
+## Features
+* **Static Provisioning** - firstly, create a CFS filesystem on tencent cloud manually; then mount it inside container
+* **Dynamic Provisioning** - use PVC to request the Kuberenetes to create a CFS filesystem on behalf of user and consumes the filesystem from inside container
+* **Mount options ** - mount options can be specified in storageclass to define how the volume should be mounted
+
 ## CFS CSI Driver on Kubernetes
 
 **Requirements:**
