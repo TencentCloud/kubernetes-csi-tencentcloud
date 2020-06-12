@@ -2,6 +2,17 @@
 
 `kubernetes-csi-tencentloud` 是腾讯云 `Cloud Block Storage` 服务的一个满足 [CSI](https://github.com/container-storage-interface/spec) 标准实现的插件。这个插件可以让你在 Kubernetes 上使用 Cloud Block Storage。
 
+## 特性
+* **Static Provisioning** - 为一个已有的CBS盘创建PV，并在容器中使用PVC来使用它
+* **Dynamic Provisioning** - 在容器需要使用时，根据PVC去创建CBS盘
+    * specify zone - 指定要在哪个zone创建CBS盘
+        * `allowedTopologies` - topology key是`topology.com.tencent.cloud.csi.cbs/zone`.
+        * `diskZone/diskZones` in `StorageClass.parameters` - `diskZone/diskZones`中配置的zone优先级最高. 之后才是`allowedTopologies`中的zone
+    * **Topology-Aware** - pod被调度完以后，在相应node所在zone创建CBS盘. 如果同时`diskZone/diskZones`已配置，优先`diskZone/diskZones`
+* **Volume Snapshot** - 磁盘快照
+* **Volume Resizing** - 磁盘扩容
+* **Volume Attach Limit** - 单节点最大能attach的CBS盘数量.(每个节点最大可attach 20块CBS盘)
+
 ## 在 Kubernetes 上安装
 
 **前置要求:**
