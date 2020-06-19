@@ -15,13 +15,27 @@
 
 ## 在 Kubernetes 上安装
 
+**注意**:
+在讲述**前置要求**之前，对于各组件设置参数启动项有些要注意的地方：
+- 有些feature gates在GA以后的版本不能再被显式设置，否则可能导致报错。实际上这些feature gates在beta版本开始则无需添加。下表整理了涉及到feature gates的beta版本的表格，在给kubelet、master/controllermanager、scheduler设置启动参数时，可以基于此来做取舍.（举例：KubeletPluginsWatcher在1.12及以上版本则无须添加）
+
+| 特性                         | 默认值    | 阶段   | 起始   | 直到   |
+| -------------------------- | ------ | ---- | ---- | ---- |
+| `VolumeSnapshotDataSource` | `true` | Beta | 1.17 | -    |
+| `CSINodeInfo`              | `true` | Beta | 1.14 | 1.16 |
+| `CSIDriverRegistry`        | `true` | Beta | 1.14 | 1.17 |
+| `KubeletPluginsWatcher`    | `true` | Beta | 1.12 | 1.12 |
+| `VolumeScheduling`         | `true` | Beta | 1.10 | 1.12 |
+
 **前置要求:**
 
 * Kubernetes v1.13.x及以上
-* kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true (针对 v1.15.x 及以上版本, kubelet 默认设置 `--allow-privileged` 为 true )
+* kube-apiserver 和 kubelet 的 `--allow-privileged` flag 都要设置为 true (针对 v1.15.x 及以上版本, kubelet 默认设置 `--allow-privileged` 为 true，如果仍然显式设置，则会报错 )
 * 所有节点的kubelet 需要添加的启动项为：--feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,KubeletPluginsWatcher=true
 * apiserver/controller-manager:  --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true
 * scheduler: --feature-gates=VolumeSnapshotDataSource=true,CSINodeInfo=true,CSIDriverRegistry=true,VolumeScheduling=true
+
+
 
 #### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
 
