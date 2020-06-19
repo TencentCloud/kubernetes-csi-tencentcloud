@@ -14,11 +14,22 @@
 * **Volume Attach Limit** - the maximum number of CBS disks that can be attached to one node.(20 CBS disks per node)
 
 ## Install Kubernetes
+**Note**:
+We need know some notes before **Requirements**:
+- If setting some feature gates explicitly, we will get some errors. We can se them implicitly start from the beta versions of these feature gates.(e.g. KubeletPluginsWatcher can be not set to kubelet start from 1.12.). Please reference follow table:
+
+| 特性                         | 默认值    | 阶段   | 起始   | 直到   |
+| -------------------------- | ------ | ---- | ---- | ---- |
+| `VolumeSnapshotDataSource` | `true` | Beta | 1.17 | -    |
+| `CSINodeInfo`              | `true` | Beta | 1.14 | 1.16 |
+| `CSIDriverRegistry`        | `true` | Beta | 1.14 | 1.17 |
+| `KubeletPluginsWatcher`    | `true` | Beta | 1.12 | 1.12 |
+| `VolumeScheduling`         | `true` | Beta | 1.10 | 1.12 |
 
 **Requirements:**
 
 * Kubernetes v1.14.x+
-* kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true)
+* kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true. if still set it explicitly, will get error.)
 * kubelet configuration：`--feature-gates=VolumeSnapshotDataSource=true`
 * apiserver/controller-manager configuration：:  `--feature-gates=VolumeSnapshotDataSource=true`
 * scheduler configuration：: `--feature-gates=VolumeSnapshotDataSource=true,VolumeScheduling=true`
