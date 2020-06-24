@@ -18,7 +18,7 @@
 We need know some notes before **Requirements**:
 - If setting some feature gates explicitly, we will get some errors. We can se them implicitly start from the beta versions of these feature gates.(e.g. KubeletPluginsWatcher can be not set to kubelet start from 1.12.). Please reference follow table:
 
-| 特性                         | 默认值    | 阶段   | 起始   | 直到   |
+| Feature                    | Default    | Stage   | Since   | Until   |
 | -------------------------- | ------ | ---- | ---- | ---- |
 | `VolumeSnapshotDataSource` | `true` | Beta | 1.17 | -    |
 | `CSINodeInfo`              | `true` | Beta | 1.14 | 1.16 |
@@ -42,6 +42,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: csi-tencentcloud
+  namespace: kube-system
 data:
   # value need base64 encoding
   # echo -n "<SECRET_ID>" | base64
@@ -52,41 +53,37 @@ data:
 ### rbac
 
 ```yaml
-kubectl apply -f  deploy/kubernetes/csi-attacher-rbac.yaml
-kubectl apply -f  deploy/kubernetes/csi-nodeplugin-rbac.yaml
-kubectl apply -f  deploy/kubernetes/csi-provisioner-rbac.yaml
-
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller-rbac.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
 
 ### controller,node plugin
 
 ```yaml
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin.yaml
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin-provisioner.yaml
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
-
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node.yaml
 ```
 
 ### examples
 
 ```yaml
 storageclass:
-    kubectl apply -f  deploy/examples/storageclass-basic.yaml
+    kubectl apply -f  deploy/cbs/examples/storageclass-basic.yaml
 pvc:
-    kubectl apply -f  deploy/examples/pvc.yaml
+    kubectl apply -f  deploy/cbs/examples/pvc.yaml
 pod:
-    kubectl apply -f  deploy/examples/app.yaml
+    kubectl apply -f  deploy/cbs/examples/app.yaml
 snapshotclass:
-    kubectl apply -f  deploy/examples/snapshoter/snapshoterclass.yaml
+    kubectl apply -f  deploy/cbs/examples/snapshoter/snapshoterclass.yaml
 snapshot:
-    kubectl apply -f  deploy/examples/snapshoter/snapshot.yaml
+    kubectl apply -f  deploy/cbs/examples/snapshoter/snapshot.yaml
 restore:
-    kubectl apply -f  deploy/examples/snapshoter/restore.yaml
+    kubectl apply -f  deploy/cbs/examples/snapshoter/restore.yaml
 ```
 
 ## StorageClass parameters
 
-**Note**：[examples](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/examples/storageclass-examples.yaml)
+**Note**：[examples](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
 
 * If there are multiple zones of node in your cluster, you can enable topology-aware scheduling of cbs storage volumes with adding `volumeBindingMode: WaitForFirstConsumer` in storageclass, deploy/examples/storageclass-topology.yaml, because cbs volumes can't attach a node with different zone.
 * diskType: cbs volume type, `CLOUD_BASIC`,`CLOUD_PREMIUM`,`CLOUD_SSD`.
