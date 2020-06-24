@@ -37,7 +37,7 @@
 
 
 
-#### 1. 使用腾讯云 API Credential 创建 kubernetes secret: 
+####  使用腾讯云 API Credential 创建 kubernetes secret: 
 
 ```
 #  参考示例 deploy/kubernetes/secret.yaml
@@ -45,6 +45,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: csi-tencentcloud
+  namespace: kube-system
 data:
   # 需要注意的是,secret 的 value 需要进行 base64 编码
   #   echo -n "<SECRET_ID>" | base64
@@ -52,34 +53,25 @@ data:
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
 ```
 
-#### 2. 部署 CSI1.0 需要的crd:
-```
-kubectl create -f  deploy/kubernetes/csinodeinfo.yaml
-kubectl create -f  deploy/kubernetes/csidriver.yaml
-```
 
-#### 3. 部署rbac
+#### 创建rbac
 
 创建attacher,provisioner,plugin需要的rbac：
 
 ```
-kubectl apply -f  deploy/kubernetes/csi-attacher-rbac.yaml
-kubectl apply -f  deploy/kubernetes/csi-nodeplugin-rbac.yaml
-kubectl apply -f  deploy/kubernetes/csi-provisioner-rbac.yaml
-
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller-rbac.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
 
-#### 4. 创建controller,node和plugin
-创建pluginserver的daemonset, controller和node的statefulset
+#### 创建controller,node和plugin
+创建controller plugin和node plugin
 
 ```
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin.yaml
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin-provisioner.yaml
-kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
-
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node.yaml
 ```
 
-#### 5.简单测试验证
+#### 简单测试验证
 
 ```
 创建storageclass:
@@ -93,7 +85,7 @@ kubectl apply -f  deploy/kubernetes/csi-cbsplugin-attacher.yaml
 
 ## StorageClass 支持的参数
 
-**Note**：可以参考[示例](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/examples/storageclass-examples.yaml)
+**Note**：可以参考[示例](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
 
 * 如果您集群中的节点存在多个可用区，那么您可以开启cbs存储卷的拓扑感知调度，需要在storageclass中添加`volumeBindingMode: WaitForFirstConsumer`，如deploy/examples/storageclass-topology.yaml，否则可能会出现cbs存储卷因跨可用区而挂载失败。
 * diskType: 代表要创建的 cbs 盘的类型；值为 `CLOUD_BASIC` 代表创建普通云盘，值为 `CLOUD_PREMIUM` 代表创建高性能云盘，值为 `CLOUD_SSD` 代表创建 ssd 云盘
