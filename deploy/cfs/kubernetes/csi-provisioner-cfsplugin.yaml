@@ -43,7 +43,7 @@ spec:
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
           image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfs:1.0.0
-          args :
+          args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
           env:
