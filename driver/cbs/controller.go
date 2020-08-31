@@ -65,6 +65,10 @@ var (
 
 	//cbs disk asp Id
 	AspId = "aspId"
+
+	TagForDeletionCreateBy  = "tke-cbs-provisioner-createBy-flag"
+	TagForDeletionClusterId = "tke-clusterId"
+
 	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
@@ -98,10 +102,11 @@ var (
 type cbsController struct {
 	cbsClient     *cbs.Client
 	zone          string
+	clusterId     string
 	metadataStore util.CachePersister
 }
 
-func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePersister util.CachePersister) (*cbsController, error) {
+func newCbsController(secretId, secretKey, region, zone, cbsUrl, clusterId string, cachePersister util.CachePersister) (*cbsController, error) {
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = cbsUrl
 	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, cpf)
@@ -112,6 +117,7 @@ func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePer
 	return &cbsController{
 		cbsClient:     client,
 		zone:          zone,
+		clusterId:     clusterId,
 		metadataStore: cachePersister,
 	}, nil
 }
@@ -267,6 +273,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	aspId, ok := req.Parameters[AspId]
 	if !ok {
 		aspId = ""
+	}
+
+	if ctrl.clusterId != "" {
+		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionCreateBy), Value: common.StringPtr("yes")})
+		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionClusterId), Value: common.StringPtr(ctrl.clusterId)})
 	}
 
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
