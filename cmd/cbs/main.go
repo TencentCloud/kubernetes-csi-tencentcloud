@@ -17,6 +17,8 @@ import (
 const (
 	TENCENTCLOUD_CBS_API_SECRET_ID  = "TENCENTCLOUD_CBS_API_SECRET_ID"
 	TENCENTCLOUD_CBS_API_SECRET_KEY = "TENCENTCLOUD_CBS_API_SECRET_KEY"
+
+	ClusterId = "CLUSTER_ID"
 )
 
 var (
@@ -75,7 +77,7 @@ func main() {
 
 	cp := util.NewCachePersister()
 
-	drv, err := cbs.NewDriver(*region, *zone, *secretId, *secretKey)
+	drv, err := cbs.NewDriver(*region, *zone, *secretId, *secretKey, os.Getenv(ClusterId))
 	if err != nil {
 		glog.Fatal(err)
 	}

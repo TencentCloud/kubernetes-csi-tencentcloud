@@ -25,21 +25,23 @@ type Driver struct {
 	zone      string
 	secretId  string
 	secretKey string
+	clusterId string
 }
 
-func NewDriver(region string, zone string, secretId string, secretKey string) (*Driver, error) {
+func NewDriver(region, zone, secretId, secretKey, clusterId string) (*Driver, error) {
 	driver := Driver{
 		zone:      zone,
 		region:    region,
 		secretId:  secretId,
 		secretKey: secretKey,
+		clusterId: clusterId,
 	}
 
 	return &driver, nil
 }
 
 func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.CachePersister) error {
-	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone, cbsUrl, cachePersister)
+	controller, err := newCbsController(drv.secretId, drv.secretKey, drv.region, drv.zone, cbsUrl, drv.clusterId, cachePersister)
 	if err != nil {
 		return err
 	}

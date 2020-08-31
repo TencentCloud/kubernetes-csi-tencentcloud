@@ -122,6 +122,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+# for deleting cbs disks in cluster while deleting cluster
+#            - name: CLUSTER_ID
+#              value: cls-xxxxxx
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
