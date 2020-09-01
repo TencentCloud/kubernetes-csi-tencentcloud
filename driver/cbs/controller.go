@@ -470,7 +470,9 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	}
 
 	if len(listCbsResponse.Response.DiskSet) <= 0 {
-		return nil, status.Error(codes.NotFound, "disk not found")
+		// return nil, status.Error(codes.NotFound, "disk not found")
+		glog.Warningf("ControllerUnpublishVolume: detach disk %s from node %s, but cbs disk does not exist; assuming the disk is detached", diskId, req.NodeId)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
 	for _, disk := range listCbsResponse.Response.DiskSet {
