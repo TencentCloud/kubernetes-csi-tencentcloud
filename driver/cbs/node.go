@@ -30,7 +30,7 @@ var (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
 
-	MaxAttachVolumePerNode = 20
+	defaultMaxAttachVolumePerNode = 20
 
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
@@ -40,14 +40,15 @@ var (
 )
 
 type cbsNode struct {
-	metadataClient *metadata.MetaData
-	cbsClient      *cbs.Client
-	mounter        mount.SafeFormatAndMount
-	idempotent     *util.Idempotent
+	metadataClient    *metadata.MetaData
+	cbsClient         *cbs.Client
+	mounter           mount.SafeFormatAndMount
+	idempotent        *util.Idempotent
+	volumeAttachLimit int64
 }
 
 // TODO  node plugin need idempotent and should use inflight
-func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
+func newCbsNode(secretId, secretKey, region string, volumeAttachLimit int64) (*cbsNode, error) {
 	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, profile.NewClientProfile())
 	if err != nil {
 		return nil, err
@@ -60,7 +61,8 @@ func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
 			Interface: mount.New(""),
 			Exec:      exec.New(),
 		},
-		idempotent: util.NewIdempotent(),
+		idempotent:        util.NewIdempotent(),
+		volumeAttachLimit: volumeAttachLimit,
 	}
 	return &node, nil
 }
@@ -268,7 +270,7 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 
 	return &csi.NodeGetInfoResponse{
 		NodeId:            nodeID,
-		MaxVolumesPerNode: int64(MaxAttachVolumePerNode),
+		MaxVolumesPerNode: node.getMaxAttachVolumePerNode(),
 
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
@@ -364,6 +366,14 @@ func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil
+}
+
+func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
+	if node.volumeAttachLimit >= 0 {
+		return node.volumeAttachLimit
+	}
+
+	return int64(defaultMaxAttachVolumePerNode)
 }
 
 func findCBSVolume(diskId string) (device string, err error) {

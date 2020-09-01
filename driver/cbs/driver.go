@@ -25,16 +25,19 @@ type Driver struct {
 	zone      string
 	secretId  string
 	secretKey string
-	clusterId string
+	// TKE cluster ID
+	clusterId         string
+	volumeAttachLimit int64
 }
 
-func NewDriver(region, zone, secretId, secretKey, clusterId string) (*Driver, error) {
+func NewDriver(region, zone, secretId, secretKey, clusterId string, volumeAttachLimit int64) (*Driver, error) {
 	driver := Driver{
-		zone:      zone,
-		region:    region,
-		secretId:  secretId,
-		secretKey: secretKey,
-		clusterId: clusterId,
+		zone:              zone,
+		region:            region,
+		secretId:          secretId,
+		secretKey:         secretKey,
+		clusterId:         clusterId,
+		volumeAttachLimit: volumeAttachLimit,
 	}
 
 	return &driver, nil
@@ -55,7 +58,7 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 		return err
 	}
 
-	node, err := newCbsNode(drv.secretId, drv.secretKey, drv.region)
+	node, err := newCbsNode(drv.secretId, drv.secretKey, drv.region, drv.volumeAttachLimit)
 	if err != nil {
 		return err
 	}
