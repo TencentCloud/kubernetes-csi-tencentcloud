@@ -106,10 +106,17 @@ type cbsController struct {
 	metadataStore util.CachePersister
 }
 
-func newCbsController(secretId, secretKey, region, zone, cbsUrl, clusterId string, cachePersister util.CachePersister) (*cbsController, error) {
+func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister util.CachePersister) (*cbsController, error) {
+	secretID, secretKey, token, _ := util.GetSercet()
+	cred := &common.Credential{
+		SecretId:  secretID,
+		SecretKey: secretKey,
+		Token:     token,
+	}
+
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = cbsUrl
-	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, cpf)
+	client, err := cbs.NewClient(cred, region, cpf)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +253,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		Zone: &volumeZone,
 	}
 
+	updateCbsClent(ctrl.cbsClient)
 	if req.VolumeContentSource != nil {
 		snapshot := req.VolumeContentSource.GetSnapshot()
 		if snapshot == nil {
@@ -354,6 +362,7 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 
 	describeDiskRequest := cbs.NewDescribeDisksRequest()
 	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
+	updateCbsClent(ctrl.cbsClient)
 	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -391,7 +400,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -463,7 +472,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -565,7 +574,7 @@ func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.
 	// check size
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -635,6 +644,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}
 	sourceVolumeId := req.GetSourceVolumeId()
 	snapshotName := req.GetName()
+	updateCbsClent(ctrl.cbsClient)
 
 	if cbsSnap, err := getCbsSnapshotByName(snapshotName); err == nil {
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
@@ -752,6 +762,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 
 	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
+	updateCbsClent(ctrl.cbsClient)
 	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
 
 	if err != nil {

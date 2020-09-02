@@ -210,7 +210,7 @@ func (cs *controllerServer) ControllerExpandVolume(context.Context, *csi.Control
 }
 
 func updateCfsClent(client *cfsv3.Client) *cfsv3.Client {
-	secretID, secretKey, token, isTokenUpdate := GetSercet()
+	secretID, secretKey, token, isTokenUpdate := util.GetSercet()
 	if token != "" && isTokenUpdate {
 		cred := v3common.Credential{
 			SecretId:  secretID,
