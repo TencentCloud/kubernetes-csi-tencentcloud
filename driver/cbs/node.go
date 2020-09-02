@@ -48,8 +48,15 @@ type cbsNode struct {
 }
 
 // TODO  node plugin need idempotent and should use inflight
-func newCbsNode(secretId, secretKey, region string, volumeAttachLimit int64) (*cbsNode, error) {
-	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, profile.NewClientProfile())
+func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
+	secretID, secretKey, token, _ := util.GetSercet()
+	cred := &common.Credential{
+		SecretId:  secretID,
+		SecretKey: secretKey,
+		Token:     token,
+	}
+
+	client, err := cbs.NewClient(cred, region, profile.NewClientProfile())
 	if err != nil {
 		return nil, err
 	}

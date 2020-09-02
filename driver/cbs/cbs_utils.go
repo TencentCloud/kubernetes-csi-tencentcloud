@@ -3,6 +3,10 @@ package cbs
 import (
 	"fmt"
 	"sync"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 )
 
 type cbsSnapshot struct {
@@ -42,4 +46,17 @@ func getCbsSnapshotByName(snapName string) (*cbsSnapshot, error) {
 		}
 	}
 	return nil, fmt.Errorf("snapshot name %s does not exit in the snapshots list", snapName)
+}
+
+func updateCbsClent(client *cbs.Client) *cbs.Client {
+	secretID, secretKey, token, isTokenUpdate := util.GetSercet()
+	if token != "" && isTokenUpdate {
+		cred := common.Credential{
+			SecretId:  secretID,
+			SecretKey: secretKey,
+			Token:     token,
+		}
+		client.WithCredential(&cred)
+	}
+	return client
 }

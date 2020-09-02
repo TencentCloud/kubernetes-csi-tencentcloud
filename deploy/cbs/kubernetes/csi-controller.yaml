@@ -108,16 +108,18 @@ spec:
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
-            - name: TENCENTCLOUD_CBS_API_SECRET_ID
+            - name: TENCENTCLOUD_API_SECRET_ID
               valueFrom:
                 secretKeyRef:
                   name: csi-tencentcloud
                   key: TENCENTCLOUD_CBS_API_SECRET_ID
-            - name: TENCENTCLOUD_CBS_API_SECRET_KEY
+                  optional: true
+            - name: TENCENTCLOUD_API_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: csi-tencentcloud
                   key: TENCENTCLOUD_CBS_API_SECRET_KEY
+                  optional: true
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
