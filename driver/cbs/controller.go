@@ -3,6 +3,7 @@ package cbs
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,17 +25,13 @@ import (
 var (
 	GB = 1 << (10 * 3)
 
-	// cbs disk type
-	DiskTypeAttr = "diskType"
-
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
 	DiskTypeCloudSsd     = "CLOUD_SSD"
 
-	DiskTypeDefault = DiskTypeCloudBasic
+	DiskTypeDefault = DiskTypeCloudPremium
 
 	// cbs disk charge type
-	DiskChargeTypeAttr           = "diskChargeType"
 	DiskChargeTypePrePaid        = "PREPAID"
 	DiskChargeTypePostPaidByHour = "POSTPAID_BY_HOUR"
 
@@ -45,8 +42,6 @@ var (
 
 	DiskChargePrepaidPeriodValidValues = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36}
 	DiskChargePrepaidPeriodDefault     = 1
-
-	DiskChargePrepaidRenewFlagAttr = "diskChargePrepaidRenewFlag"
 
 	DiskChargePrepaidRenewFlagNotifyAndAutoRenew          = "NOTIFY_AND_AUTO_RENEW"
 	DiskChargePrepaidRenewFlagNotifyAndManualRenewd       = "NOTIFY_AND_MANUAL_RENEW"
@@ -63,9 +58,6 @@ var (
 
 	//cbs disk zones
 	DiskZones = "diskZones"
-
-	//cbs disk asp Id
-	AspId = "aspId"
 
 	TagForDeletionCreateBy  = "tke-cbs-provisioner-createBy-flag"
 	TagForDeletionClusterId = "tke-clusterId"
@@ -151,38 +143,46 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	volumeType, ok := req.Parameters[DiskTypeAttr]
-	if !ok {
-		volumeType = DiskTypeDefault
+	var aspId, volumeZone string
+	volumeType := DiskTypeDefault
+	volumeChargeType := DiskChargeTypeDefault
+	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
+	volumeChargePrepaidPeriod := 1
+	projectId := 0
+	for k, v := range req.Parameters {
+		switch strings.ToLower(k) {
+		case "aspid":
+			aspId = v
+		case "type", "disktype":
+			volumeType = v
+		case "zone", "diskzone":
+			volumeZone = v
+		case "paymode", "diskchargetype":
+			volumeChargeType = v
+		case "renewflag", "diskchargeprepaidrenewflag":
+			volumeChargePrepaidRenewFlag = v
+		case "diskchargetypeprepaidperiod":
+			var err error
+			volumeChargePrepaidPeriod, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Infof("volumeChargePrepaidPeriod atoi error: %v", err)
+			}
+		case "project":
+			var err error
+			projectId, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Infof("projectId atoi error: %v", err)
+			}
+		default:
+		}
 	}
 
 	if volumeType != DiskTypeCloudBasic && volumeType != DiskTypeCloudPremium && volumeType != DiskTypeCloudSsd {
 		return nil, status.Error(codes.InvalidArgument, "cbs type not supported")
 	}
 
-	volumeChargeType, ok := req.Parameters[DiskChargeTypeAttr]
-	if !ok {
-		volumeChargeType = DiskChargeTypeDefault
-	}
-
-	var volumeChargePrepaidPeriod int
-	var volumeChargePrepaidRenewFlag string
-
 	if volumeChargeType == DiskChargeTypePrePaid {
-		var err error
-		var ok bool
-		volumeChargePrepaidPeriodStr, ok := req.Parameters[DiskChargePrepaidPeriodAttr]
-		if !ok {
-			volumeChargePrepaidPeriodStr = strconv.Itoa(DiskChargePrepaidPeriodDefault)
-		}
-
-		volumeChargePrepaidPeriod, err = strconv.Atoi(volumeChargePrepaidPeriodStr)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "prepaid period not valid")
-		}
-
 		found := false
-
 		for _, p := range DiskChargePrepaidPeriodValidValues {
 			if p == volumeChargePrepaidPeriod {
 				found = true
@@ -193,10 +193,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			return nil, status.Error(codes.InvalidArgument, "can not found valid prepaid period")
 		}
 
-		volumeChargePrepaidRenewFlag, ok = req.Parameters[DiskChargePrepaidRenewFlagAttr]
-		if !ok {
-			volumeChargePrepaidRenewFlag = DiskChargePrepaidRenewFlagDefault
-		}
 		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenewd {
 			return nil, status.Error(codes.InvalidArgument, "invalid renew flag")
 		}
@@ -240,7 +236,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	//zone parameters
-	volumeZone, ok := req.Parameters[DiskZone]
+	// volumeZone, ok := req.Parameters[DiskZone]
 	// volumeZones, ok2 := req.Parameters[DiskZones]
 	// if ok1 && ok2 {
 	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
@@ -255,7 +251,8 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	createCbsReq.Placement = &cbs.Placement{
-		Zone: &volumeZone,
+		Zone:      &volumeZone,
+		ProjectId: common.Uint64Ptr(uint64(projectId)),
 	}
 
 	updateCbsClent(ctrl.cbsClient)
@@ -279,13 +276,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			return nil, status.Error(codes.NotFound, "Volume Snapshot not found")
 		}
 		createCbsReq.SnapshotId = &snapshotId
-	}
-
-	//aspId parameters
-	//zone parameters
-	aspId, ok := req.Parameters[AspId]
-	if !ok {
-		aspId = ""
 	}
 
 	if ctrl.clusterId != "" {
