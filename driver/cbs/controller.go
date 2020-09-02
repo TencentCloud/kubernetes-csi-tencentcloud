@@ -1,6 +1,7 @@
 package cbs
 
 import (
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -213,7 +214,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	createCbsReq := cbs.NewCreateDisksRequest()
 
-	createCbsReq.DiskName = &volumeIdempotencyName
+	diskName := volumeIdempotencyName
+	if ctrl.clusterId != "" {
+		diskName = fmt.Sprintf("%s/%s", ctrl.clusterId, volumeIdempotencyName)
+	}
+	createCbsReq.DiskName = common.StringPtr(diskName)
 	createCbsReq.ClientToken = &volumeIdempotencyName
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
