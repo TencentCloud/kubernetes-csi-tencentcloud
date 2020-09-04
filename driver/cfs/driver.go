@@ -20,6 +20,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cfsv3 "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719"
 	v3common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	v3profile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -79,7 +80,7 @@ func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 }
 
 func NewControllerServer(d *driver) *controllerServer {
-	secretID, secretKey, token, _ := GetSercet()
+	secretID, secretKey, token, _ := util.GetSercet()
 
 	cred := v3common.Credential{
 		SecretId:  secretID,

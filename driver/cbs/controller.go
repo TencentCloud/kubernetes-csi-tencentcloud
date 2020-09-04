@@ -1,7 +1,9 @@
 package cbs
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,17 +25,13 @@ import (
 var (
 	GB = 1 << (10 * 3)
 
-	// cbs disk type
-	DiskTypeAttr = "diskType"
-
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
 	DiskTypeCloudSsd     = "CLOUD_SSD"
 
-	DiskTypeDefault = DiskTypeCloudBasic
+	DiskTypeDefault = DiskTypeCloudPremium
 
 	// cbs disk charge type
-	DiskChargeTypeAttr           = "diskChargeType"
 	DiskChargeTypePrePaid        = "PREPAID"
 	DiskChargeTypePostPaidByHour = "POSTPAID_BY_HOUR"
 
@@ -44,8 +42,6 @@ var (
 
 	DiskChargePrepaidPeriodValidValues = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36}
 	DiskChargePrepaidPeriodDefault     = 1
-
-	DiskChargePrepaidRenewFlagAttr = "diskChargePrepaidRenewFlag"
 
 	DiskChargePrepaidRenewFlagNotifyAndAutoRenew          = "NOTIFY_AND_AUTO_RENEW"
 	DiskChargePrepaidRenewFlagNotifyAndManualRenewd       = "NOTIFY_AND_MANUAL_RENEW"
@@ -63,8 +59,9 @@ var (
 	//cbs disk zones
 	DiskZones = "diskZones"
 
-	//cbs disk asp Id
-	AspId = "aspId"
+	TagForDeletionCreateBy  = "tke-cbs-provisioner-createBy-flag"
+	TagForDeletionClusterId = "tke-clusterId"
+
 	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
@@ -98,13 +95,21 @@ var (
 type cbsController struct {
 	cbsClient     *cbs.Client
 	zone          string
+	clusterId     string
 	metadataStore util.CachePersister
 }
 
-func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePersister util.CachePersister) (*cbsController, error) {
+func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister util.CachePersister) (*cbsController, error) {
+	secretID, secretKey, token, _ := util.GetSercet()
+	cred := &common.Credential{
+		SecretId:  secretID,
+		SecretKey: secretKey,
+		Token:     token,
+	}
+
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = cbsUrl
-	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, cpf)
+	client, err := cbs.NewClient(cred, region, cpf)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +117,7 @@ func newCbsController(secretId, secretKey, region, zone, cbsUrl string, cachePer
 	return &cbsController{
 		cbsClient:     client,
 		zone:          zone,
+		clusterId:     clusterId,
 		metadataStore: cachePersister,
 	}, nil
 }
@@ -137,38 +143,46 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	volumeType, ok := req.Parameters[DiskTypeAttr]
-	if !ok {
-		volumeType = DiskTypeDefault
+	var aspId, volumeZone string
+	volumeType := DiskTypeDefault
+	volumeChargeType := DiskChargeTypeDefault
+	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
+	volumeChargePrepaidPeriod := 1
+	projectId := 0
+	for k, v := range req.Parameters {
+		switch strings.ToLower(k) {
+		case "aspid":
+			aspId = v
+		case "type", "disktype":
+			volumeType = v
+		case "zone", "diskzone":
+			volumeZone = v
+		case "paymode", "diskchargetype":
+			volumeChargeType = v
+		case "renewflag", "diskchargeprepaidrenewflag":
+			volumeChargePrepaidRenewFlag = v
+		case "diskchargetypeprepaidperiod":
+			var err error
+			volumeChargePrepaidPeriod, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Infof("volumeChargePrepaidPeriod atoi error: %v", err)
+			}
+		case "project":
+			var err error
+			projectId, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Infof("projectId atoi error: %v", err)
+			}
+		default:
+		}
 	}
 
 	if volumeType != DiskTypeCloudBasic && volumeType != DiskTypeCloudPremium && volumeType != DiskTypeCloudSsd {
 		return nil, status.Error(codes.InvalidArgument, "cbs type not supported")
 	}
 
-	volumeChargeType, ok := req.Parameters[DiskChargeTypeAttr]
-	if !ok {
-		volumeChargeType = DiskChargeTypeDefault
-	}
-
-	var volumeChargePrepaidPeriod int
-	var volumeChargePrepaidRenewFlag string
-
 	if volumeChargeType == DiskChargeTypePrePaid {
-		var err error
-		var ok bool
-		volumeChargePrepaidPeriodStr, ok := req.Parameters[DiskChargePrepaidPeriodAttr]
-		if !ok {
-			volumeChargePrepaidPeriodStr = strconv.Itoa(DiskChargePrepaidPeriodDefault)
-		}
-
-		volumeChargePrepaidPeriod, err = strconv.Atoi(volumeChargePrepaidPeriodStr)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "prepaid period not valid")
-		}
-
 		found := false
-
 		for _, p := range DiskChargePrepaidPeriodValidValues {
 			if p == volumeChargePrepaidPeriod {
 				found = true
@@ -179,10 +193,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			return nil, status.Error(codes.InvalidArgument, "can not found valid prepaid period")
 		}
 
-		volumeChargePrepaidRenewFlag, ok = req.Parameters[DiskChargePrepaidRenewFlagAttr]
-		if !ok {
-			volumeChargePrepaidRenewFlag = DiskChargePrepaidRenewFlagDefault
-		}
 		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenewd {
 			return nil, status.Error(codes.InvalidArgument, "invalid renew flag")
 		}
@@ -200,7 +210,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	createCbsReq := cbs.NewCreateDisksRequest()
 
-	createCbsReq.DiskName = &volumeIdempotencyName
+	diskName := volumeIdempotencyName
+	if ctrl.clusterId != "" {
+		diskName = fmt.Sprintf("%s/%s", ctrl.clusterId, volumeIdempotencyName)
+	}
+	createCbsReq.DiskName = common.StringPtr(diskName)
 	createCbsReq.ClientToken = &volumeIdempotencyName
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
@@ -222,7 +236,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	//zone parameters
-	volumeZone, ok := req.Parameters[DiskZone]
+	// volumeZone, ok := req.Parameters[DiskZone]
 	// volumeZones, ok2 := req.Parameters[DiskZones]
 	// if ok1 && ok2 {
 	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
@@ -237,9 +251,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	createCbsReq.Placement = &cbs.Placement{
-		Zone: &volumeZone,
+		Zone:      &volumeZone,
+		ProjectId: common.Uint64Ptr(uint64(projectId)),
 	}
 
+	updateCbsClent(ctrl.cbsClient)
 	if req.VolumeContentSource != nil {
 		snapshot := req.VolumeContentSource.GetSnapshot()
 		if snapshot == nil {
@@ -262,11 +278,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		createCbsReq.SnapshotId = &snapshotId
 	}
 
-	//aspId parameters
-	//zone parameters
-	aspId, ok := req.Parameters[AspId]
-	if !ok {
-		aspId = ""
+	if ctrl.clusterId != "" {
+		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionCreateBy), Value: common.StringPtr("yes")})
+		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionClusterId), Value: common.StringPtr(ctrl.clusterId)})
 	}
 
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
@@ -343,6 +357,7 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 
 	describeDiskRequest := cbs.NewDescribeDisksRequest()
 	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
+	updateCbsClent(ctrl.cbsClient)
 	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -380,7 +395,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -452,14 +467,16 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	if len(listCbsResponse.Response.DiskSet) <= 0 {
-		return nil, status.Error(codes.NotFound, "disk not found")
+		// return nil, status.Error(codes.NotFound, "disk not found")
+		glog.Warningf("ControllerUnpublishVolume: detach disk %s from node %s, but cbs disk does not exist; assuming the disk is detached", diskId, req.NodeId)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
 	for _, disk := range listCbsResponse.Response.DiskSet {
@@ -552,7 +569,7 @@ func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.
 	// check size
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-
+	updateCbsClent(ctrl.cbsClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -622,6 +639,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}
 	sourceVolumeId := req.GetSourceVolumeId()
 	snapshotName := req.GetName()
+	updateCbsClent(ctrl.cbsClient)
 
 	if cbsSnap, err := getCbsSnapshotByName(snapshotName); err == nil {
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
@@ -739,6 +757,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 
 	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
+	updateCbsClent(ctrl.cbsClient)
 	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
 
 	if err != nil {

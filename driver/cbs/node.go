@@ -2,6 +2,7 @@ package cbs
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ var (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
 
-	MaxAttachVolumePerNode = 20
+	defaultMaxAttachVolumePerNode = 20
 
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
@@ -39,15 +40,23 @@ var (
 )
 
 type cbsNode struct {
-	metadataClient *metadata.MetaData
-	cbsClient      *cbs.Client
-	mounter        mount.SafeFormatAndMount
-	idempotent     *util.Idempotent
+	metadataClient    *metadata.MetaData
+	cbsClient         *cbs.Client
+	mounter           mount.SafeFormatAndMount
+	idempotent        *util.Idempotent
+	volumeAttachLimit int64
 }
 
 // TODO  node plugin need idempotent and should use inflight
-func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
-	client, err := cbs.NewClient(common.NewCredential(secretId, secretKey), region, profile.NewClientProfile())
+func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
+	secretID, secretKey, token, _ := util.GetSercet()
+	cred := &common.Credential{
+		SecretId:  secretID,
+		SecretKey: secretKey,
+		Token:     token,
+	}
+
+	client, err := cbs.NewClient(cred, region, profile.NewClientProfile())
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +68,8 @@ func newCbsNode(secretId, secretKey, region string) (*cbsNode, error) {
 			Interface: mount.New(""),
 			Exec:      exec.New(),
 		},
-		idempotent: util.NewIdempotent(),
+		idempotent:        util.NewIdempotent(),
+		volumeAttachLimit: volumeAttachLimit,
 	}
 	return &node, nil
 }
@@ -111,10 +121,9 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	}
 
 	//2. check target path mounted
-	cbsDisk := filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID)
-	diskSource, err := findCBSVolume(cbsDisk)
+	diskSource, err := findCBSVolume(diskID)
 	if err != nil {
-		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", cbsDisk, err)
+		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID), err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -268,7 +277,7 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 
 	return &csi.NodeGetInfoResponse{
 		NodeId:            nodeID,
-		MaxVolumesPerNode: int64(MaxAttachVolumePerNode),
+		MaxVolumesPerNode: node.getMaxAttachVolumePerNode(),
 
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
@@ -366,12 +375,33 @@ func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
-func findCBSVolume(p string) (device string, err error) {
+func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
+	if node.volumeAttachLimit >= 0 {
+		return node.volumeAttachLimit
+	}
+
+	return int64(defaultMaxAttachVolumePerNode)
+}
+
+func findCBSVolume(diskId string) (device string, err error) {
+	p := filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskId)
+
 	stat, err := os.Lstat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			glog.Infof("cbs block path %q not found", p)
-			return "", fmt.Errorf("cbs block path %q not found", p)
+			glog.Warningf("cbs block path %s not found. We will get device from serial(/sys/block/vdX/serail)", p)
+			deviceFromSerial, err := getDevicePathsBySerial(diskId)
+			if err != nil {
+				return "", err
+			}
+
+			if err := os.Symlink(deviceFromSerial, p); err != nil {
+				glog.Errorf("Failed to link devicePathFromSerial(%s) and devicePathFromKubelet(%s): %v", deviceFromSerial, p, err)
+				return "", err
+			}
+
+			glog.Infof("Successfully get device(%s) from serial(/sys/block/vdX/serail), and Symlink %s and %s", deviceFromSerial, deviceFromSerial, p)
+			return p, nil
 		}
 		return "", fmt.Errorf("error getting stat of %q: %v", p, err)
 	}
@@ -390,4 +420,43 @@ func findCBSVolume(p string) (device string, err error) {
 	}
 
 	return resolved, nil
+}
+
+func getDevicePathsBySerial(diskId string) (string, error) {
+	dirs, _ := filepath.Glob("/sys/block/*")
+	for _, dir := range dirs {
+		serialPath := filepath.Join(dir, "serial")
+		serialPathExist, err := pathExist(serialPath)
+		if err != nil {
+			return "", err
+		}
+
+		if serialPathExist {
+			content, err := ioutil.ReadFile(serialPath)
+			if err != nil {
+				glog.Errorf("Failed to get diskId from serial path(%s): %v", serialPath, err)
+				return "", err
+			}
+
+			if string(content) == diskId {
+				arr := strings.Split(dir, "/")
+				return filepath.Join("/dev/", arr[len(arr)-1]), nil
+			}
+		}
+	}
+
+	glog.Errorf("can not find diskId %v by serial", diskId)
+	return "", fmt.Errorf("can not find diskId %v by serial", diskId)
+}
+
+func pathExist(path string) (bool, error) {
+	_, err := os.Stat(path)
+
+	if err == nil {
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else {
+		return false, err
+	}
 }

@@ -7,8 +7,8 @@
 * **Dynamic Provisioning** - use PVC to request the Kuberenetes to create the CBS disk on behalf of user and consumes the disk from inside container
     * specify zone - which zone the CBS disk will be provisioned in.
         * `allowedTopologies` - The topology key should be `topology.com.tencent.cloud.csi.cbs/zone`.
-        * `diskZone/diskZones` in `StorageClass.parameters` - the zone in `diskZone/diskZones` is prefered. Then, zone in `allowedTopologies`.
-    * **Topology-Aware** - create disk until pod has schedulered, and create disk in the zone which node in. the zone in `diskZone/diskZones` is prefered
+        * `diskZone` in `StorageClass.parameters` - the zone in `diskZone` is prefered. Then, zone in `allowedTopologies`.
+    * **Topology-Aware** - create disk until pod has schedulered, and create disk in the zone which node in. the zone in `diskZone` is prefered
 * **Volume Snapshot**
 * **Volume Resizing** - expand volume size
 * **Volume Attach Limit** - the maximum number of CBS disks that can be attached to one node.(20 CBS disks per node)
