@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	GB = 1 << (10 * 3)
+	GB uint64 = 1 << (10 * 3)
 
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
@@ -256,12 +256,13 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	updateCbsClent(ctrl.cbsClient)
+	snapshotId := ""
 	if req.VolumeContentSource != nil {
 		snapshot := req.VolumeContentSource.GetSnapshot()
 		if snapshot == nil {
 			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot cannot be empty")
 		}
-		snapshotId := snapshot.GetSnapshotId()
+		snapshotId = snapshot.GetSnapshotId()
 		if len(snapshotId) == 0 {
 			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot ID cannot be empty")
 		}
@@ -276,6 +277,17 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			return nil, status.Error(codes.NotFound, "Volume Snapshot not found")
 		}
 		createCbsReq.SnapshotId = &snapshotId
+	}
+	// must add VolumeContentSource for snapshot volume
+	var src *csi.VolumeContentSource
+	if snapshotId != "" {
+		src = &csi.VolumeContentSource{
+			Type: &csi.VolumeContentSource_Snapshot{
+				Snapshot: &csi.VolumeContentSource_SnapshotSource{
+					SnapshotId: snapshotId,
+				},
+			},
+		}
 	}
 
 	if ctrl.clusterId != "" {
@@ -327,7 +339,8 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 							}
 							return &csi.CreateVolumeResponse{
 								Volume: &csi.Volume{
-									CapacityBytes: int64(int(*disk.DiskSize) * GB),
+									CapacityBytes: int64(*disk.DiskSize * GB),
+									ContentSource: src,
 									VolumeId:      *disk.DiskId,
 									VolumeContext: req.GetParameters(),
 									// TODO verify this topology
@@ -345,7 +358,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 				}
 			}
 		case <-ctx.Done():
-			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not ready before deadline exceeded")
+			return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("cbs disk is not ready before deadline exceeded %s", diskId))
 		}
 	}
 }
@@ -712,7 +725,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		SnapId:         snapshotId,
 		SnapName:       snapshotName,
 		SourceVolumeId: sourceVolumeId,
-		SizeBytes:      int64(*listSnapshotResponse.Response.SnapshotSet[0].DiskSize),
+		SizeBytes:      int64(*(listSnapshotResponse.Response.SnapshotSet[0].DiskSize) * GB),
 		CreatedAt:      ptypes.TimestampNow().GetSeconds(),
 	}
 
