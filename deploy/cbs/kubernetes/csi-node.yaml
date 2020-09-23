@@ -2,26 +2,24 @@
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
-  name: csi-cbsplugin-node
+  name: cbs-csi-node
   namespace: kube-system
 spec:
   selector:
     matchLabels:
-      app: csi-cbsplugin-node
+      app: cbs-csi-node
   template:
     metadata:
       labels:
-        app: csi-cbsplugin-node
+        app: cbs-csi-node
     spec:
-      serviceAccount: csi-node-sa
+      serviceAccount: cbs-csi-node-sa
       hostNetwork: true
       hostPID: true
-      # to use e.g. Rook orchestrated cluster, and mons' FQDN is
-      # resolved through k8s service, set dns policy to cluster first
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
           args:
             - "--v=5"
             - "--csi-address=/csi/csi.sock"
@@ -44,7 +42,7 @@ spec:
               mountPath: /csi
             - name: registration-dir
               mountPath: /registration
-        - name: csi-cbsplugin-node
+        - name: cbs-csi
           securityContext:
             privileged: true
             capabilities:
@@ -61,13 +59,13 @@ spec:
             - name: TENCENTCLOUD_API_SECRET_ID
               valueFrom:
                 secretKeyRef:
-                  name: csi-tencentcloud
+                  name: cbs-csi-api-key
                   key: TENCENTCLOUD_CBS_API_SECRET_ID
                   optional: true
             - name: TENCENTCLOUD_API_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: csi-tencentcloud
+                  name: cbs-csi-api-key
                   key: TENCENTCLOUD_CBS_API_SECRET_KEY
                   optional: true
             - name: POD_NAMESPACE
@@ -86,8 +84,6 @@ spec:
               mountPropagation: "Bidirectional"
             - mountPath: /dev
               name: host-dev
-            - mountPath: /rootfs
-              name: host-rootfs
             - mountPath: /sys
               name: host-sys
             - mountPath: /lib/modules
@@ -113,9 +109,6 @@ spec:
         - name: host-dev
           hostPath:
             path: /dev
-        - name: host-rootfs
-          hostPath:
-            path: /
         - name: host-sys
           hostPath:
             path: /sys
