@@ -25,6 +25,7 @@ We need know some notes before **Requirements**:
 | `CSIDriverRegistry`        | `true` | Beta | 1.14 | 1.17 |
 | `KubeletPluginsWatcher`    | `true` | Beta | 1.12 | 1.12 |
 | `VolumeScheduling`         | `true` | Beta | 1.10 | 1.12 |
+| `ExpandCSIVolumes`         | `true` | Beta | 1.16 | - |
 
 **Requirements:**
 
@@ -35,6 +36,7 @@ We need know some notes before **Requirements**:
 * scheduler configuration：: `--feature-gates=VolumeSnapshotDataSource=true,VolumeScheduling=true`
 
 ### tencentcloud yunapi secret
+***Note: If in TKE cluster, this step is optional; if not, must create this secret.***
 
 ```yaml
 # deploy/kubernetes/secret.yaml

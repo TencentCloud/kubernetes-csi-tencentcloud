@@ -26,6 +26,7 @@
 | `CSIDriverRegistry`        | `true` | Beta | 1.14 | 1.17 |
 | `KubeletPluginsWatcher`    | `true` | Beta | 1.12 | 1.12 |
 | `VolumeScheduling`         | `true` | Beta | 1.10 | 1.12 |
+| `ExpandCSIVolumes`         | `true` | Beta | 1.16 | - |
 
 **前置要求:**
 
@@ -37,7 +38,8 @@
 
 
 
-####  使用腾讯云 API Credential 创建 kubernetes secret: 
+####  使用腾讯云 API Credential 创建 kubernetes secret:
+***注： 如果是自建集群，必须创建；而如果是TKE集群环境，可以不创建该secret，driver中默认会根据TKE_QCSRole获取临时秘钥。***
 
 ```
 #  参考示例 deploy/kubernetes/secret.yaml
