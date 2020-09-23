@@ -13,6 +13,7 @@ require (
 	github.com/kubernetes-csi/drivers v1.0.2
 	github.com/pkg/errors v0.9.1
 	github.com/tencentcloud/tencentcloud-sdk-go v3.0.144+incompatible
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.5 // indirect
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	google.golang.org/grpc v1.28.0

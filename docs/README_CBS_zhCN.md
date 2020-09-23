@@ -71,6 +71,7 @@ kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node.yaml
+kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
 #### 简单测试验证
