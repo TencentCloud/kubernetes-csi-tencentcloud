@@ -1,6 +1,6 @@
-apiVersion: snapshot.storage.k8s.io/v1alpha1
+apiVersion: snapshot.storage.k8s.io/v1beta1
 kind: VolumeSnapshotClass
 metadata:
   name: cbs-snapclass
-snapshotter: com.tencent.cloud.csi.cbs
-
+driver: com.tencent.cloud.csi.cbs
+deletionPolicy: Delete
