@@ -9,7 +9,7 @@ spec:
     storage: 10Gi
   csi:
     driver: com.tencent.cloud.csi.cfs
-    volumeHandle: cfs-xxxxxxxx
+    volumeHandle: data-cfsplugin-static
     volumeAttributes: 
       host: 10.0.0.116
       path: /
