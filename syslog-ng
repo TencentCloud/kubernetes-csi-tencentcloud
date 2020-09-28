@@ -1,0 +1,37 @@
+/var/log/syslog
+{
+        rotate 4
+        size 100M
+        missingok
+        notifempty
+        postrotate
+                if [ -f /var/run/syslog-ng.pid ]; then
+                        kill -HUP `cat /var/run/syslog-ng.pid`
+                fi
+        endscript
+}
+
+/var/log/mail.info
+/var/log/mail.warn
+/var/log/mail.err
+/var/log/mail.log
+/var/log/daemon.log
+/var/log/kern.log
+/var/log/auth.log
+/var/log/user.log
+/var/log/lpr.log
+/var/log/cron.log
+/var/log/debug
+/var/log/messages
+{
+        rotate 4
+        size 100M
+        missingok
+        notifempty
+        sharedscripts
+        postrotate
+                if [ -f /var/run/syslog-ng.pid ]; then
+                        kill -HUP `cat /var/run/syslog-ng.pid`
+                fi
+        endscript
+}
