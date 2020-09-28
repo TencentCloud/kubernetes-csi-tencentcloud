@@ -9,6 +9,8 @@ LABEL description="TencentCloud COSFS CSI Plugin"
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
 
+COPY syslog-ng /etc/logrotate.d/syslog-ng
+
 COPY build/cosfs/cosfs_1.0.14-ubuntu16.04_amd64.deb  /root/cosfs_1.0.14-ubuntu16.04_amd64.deb
 
 RUN apt update && apt install --no-install-recommends --no-install-suggests -y fuse libxml2 \
@@ -18,6 +20,5 @@ RUN apt update && apt install --no-install-recommends --no-install-suggests -y f
 
 COPY build/cosfs/launcher.sh /etc/service/cos-launcher/run
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/launcher /bin/launcher
-RUN chmod +x /etc/service/cos-launcher/run && chmod +x /bin/launcher && rm -fr /etc/service/sshd \
-    && rm -fr /etc/service/cron
+RUN chmod +x /etc/service/cos-launcher/run && chmod +x /bin/launcher
 
