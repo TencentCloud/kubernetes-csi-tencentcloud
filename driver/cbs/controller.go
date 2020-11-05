@@ -149,6 +149,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
 	volumeChargePrepaidPeriod := 1
 	projectId := 0
+	volumeTags := make([]*cbs.Tag, 0)
 	for k, v := range req.Parameters {
 		switch strings.ToLower(k) {
 		case "aspid":
@@ -172,6 +173,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			projectId, err = strconv.Atoi(v)
 			if err != nil {
 				glog.Infof("projectId atoi error: %v", err)
+			}
+		case "disktags":
+			tags := strings.Split(v, ",")
+			for _, tag := range tags {
+				kv := strings.Split(tag, ":")
+				if kv == nil || len(kv) != 2 {
+					continue
+				}
+				volumeTags = append(volumeTags, &cbs.Tag{
+					Key:   &kv[0],
+					Value: &kv[1],
+				})
 			}
 		default:
 		}
@@ -290,10 +303,14 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
+	createCbsReq.Tags = append(createCbsReq.Tags, volumeTags...)
+
 	if ctrl.clusterId != "" {
 		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionCreateBy), Value: common.StringPtr("yes")})
 		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionClusterId), Value: common.StringPtr(ctrl.clusterId)})
 	}
+
+	glog.Infof("createCbsReq: %+v", createCbsReq)
 
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
 	if err != nil {
