@@ -106,6 +106,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Error(codes.InvalidArgument, "subnetID should not nil")
 	}
 	request.SubnetId = common.StringPtr(subnetID)
+	request.ClientToken = common.StringPtr(name)
 
 	updateCfsClent(cs.cfsClient)
 	response, err := cs.cfsClient.CreateCfsFileSystem(request)
