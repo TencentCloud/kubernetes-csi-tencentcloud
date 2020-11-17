@@ -54,9 +54,17 @@ spec:
             - name: CSI_ENDPOINT
               value: unix://plugin/csi.sock
             - name: TENCENTCLOUD_API_SECRET_ID
-              value: AKIDxxxxxxxxxxxxxxxxxxx
+              valueFrom:
+                secretKeyRef:
+                  name: cfs-csi-api-key
+                  key: TENCENTCLOUD_CFS_API_SECRET_ID
+                  optional: true
             - name: TENCENTCLOUD_API_SECRET_KEY
-              value: xxxxxxxxxxxxxxxxxxxxxxxx
+              valueFrom:
+                secretKeyRef:
+                  name: cfs-csi-api-key
+                  key: TENCENTCLOUD_CFS_API_SECRET_KEY
+                  optional: true
           imagePullPolicy: "IfNotPresent"
           volumeMounts:
             - name: socket-dir
