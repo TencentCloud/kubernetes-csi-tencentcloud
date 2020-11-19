@@ -144,7 +144,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	var aspId, volumeZone string
-	volumeType := DiskTypeDefault
+	inputVolumeType := DiskTypeDefault
 	volumeChargeType := DiskChargeTypeDefault
 	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
 	volumeChargePrepaidPeriod := 1
@@ -155,7 +155,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		case "aspid":
 			aspId = v
 		case "type", "disktype":
-			volumeType = v
+			inputVolumeType = v
 		case "zone", "diskzone":
 			volumeZone = v
 		case "paymode", "diskchargetype":
@@ -190,8 +190,19 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	if volumeType != DiskTypeCloudBasic && volumeType != DiskTypeCloudPremium && volumeType != DiskTypeCloudSsd {
-		return nil, status.Error(codes.InvalidArgument, "cbs type not supported")
+	//zone parameters
+	// volumeZone, ok := req.Parameters[DiskZone]
+	// volumeZones, ok2 := req.Parameters[DiskZones]
+	// if ok1 && ok2 {
+	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
+	// }
+	glog.Infof("req.GetAccessibilityRequirements() is %v", req.GetAccessibilityRequirements())
+	if volumeZone == "" {
+		volumeZone = pickAvailabilityZone(req.GetAccessibilityRequirements())
+	}
+	// TODO maybe we don't need this, controller plugin' node zone is not a property zone for pod.
+	if volumeZone == "" {
+		volumeZone = ctrl.zone
 	}
 
 	if volumeChargeType == DiskChargeTypePrePaid {
@@ -209,7 +220,23 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenewd {
 			return nil, status.Error(codes.InvalidArgument, "invalid renew flag")
 		}
+	}
 
+	sizeGb := uint64(volumeCapacity / int64(GB))
+	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, sizeGb)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if volumeType == "" {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no available storage in zone: %s", volumeZone))
+	}
+
+	var size uint64
+	if sizeGb == sizeGb/10*10 {
+		size = uint64(sizeGb)
+	} else {
+		size = uint64(((sizeGb / 10) + 1) * 10)
 	}
 
 	volumeEncrypt, ok := req.Parameters[EncryptAttr]
@@ -231,6 +258,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	createCbsReq.ClientToken = &volumeIdempotencyName
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
+	createCbsReq.DiskSize = &size
 
 	if volumeChargeType == DiskChargeTypePrePaid {
 		period := uint64(volumeChargePrepaidPeriod)
@@ -240,27 +268,8 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	gb := uint64(volumeCapacity / int64(GB))
-
-	createCbsReq.DiskSize = &gb
-
 	if volumeEncrypt == EncryptEnable {
 		createCbsReq.Encrypt = &EncryptEnable
-	}
-
-	//zone parameters
-	// volumeZone, ok := req.Parameters[DiskZone]
-	// volumeZones, ok2 := req.Parameters[DiskZones]
-	// if ok1 && ok2 {
-	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
-	// }
-	glog.Infof("req.GetAccessibilityRequirements() is %v", req.GetAccessibilityRequirements())
-	if !ok {
-		volumeZone = pickAvailabilityZone(req.GetAccessibilityRequirements())
-	}
-	// TODO maybe we don't need this, controller plugin' node zone is not a property zone for pod.
-	if volumeZone == "" {
-		volumeZone = ctrl.zone
 	}
 
 	createCbsReq.Placement = &cbs.Placement{
@@ -850,4 +859,62 @@ func (ctrl *cbsController) LoadExDataFromMetadataStore() error {
 
 	glog.Infof("Loaded %d snapshots from metadata store", len(cbsSnapshotsMapsCache.cbsSnapshotMaps))
 	return nil
+}
+
+func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode string, diskSize uint64) (string, error) {
+	diskQuotaRequest := cbs.NewDescribeDiskConfigQuotaRequest()
+	diskQuotaRequest.InquiryType = common.StringPtr("INQUIRY_CBS_CONFIG")
+	diskQuotaRequest.Zones = common.StringPtrs([]string{zone})
+	diskQuotaRequest.DiskChargeType = common.StringPtr(paymode)
+	updateCbsClent(ctrl.cbsClient)
+	diskQuotaResp, err := ctrl.cbsClient.DescribeDiskConfigQuota(diskQuotaRequest)
+	if err != nil {
+		return "", err
+	}
+
+	if inputDiskType == "cbs" {
+		return getDiskTypeForDefaultStorageClass(diskSize, diskQuotaResp)
+	}
+
+	return verifyDiskTypeIsSupported(inputDiskType, diskSize, diskQuotaResp)
+
+}
+
+func getDiskTypeForDefaultStorageClass(diskSize uint64, diskQuotaResp *cbs.DescribeDiskConfigQuotaResponse) (string, error) {
+	createType := ""
+	var minDiskSize, maxDiskSize uint64
+
+	for _, diskConfig := range diskQuotaResp.Response.DiskConfigSet {
+		if *diskConfig.Available && *diskConfig.DiskType == DiskTypeCloudPremium {
+			createType = DiskTypeCloudPremium
+			minDiskSize = *diskConfig.MinDiskSize
+			maxDiskSize = *diskConfig.MaxDiskSize
+		}
+		if *diskConfig.Available && *diskConfig.DiskType == DiskTypeCloudBasic {
+			createType = DiskTypeCloudBasic
+			minDiskSize = *diskConfig.MinDiskSize
+			maxDiskSize = *diskConfig.MaxDiskSize
+			break
+		}
+	}
+
+	if createType != "" && (diskSize < minDiskSize || diskSize > maxDiskSize) {
+		return createType, fmt.Errorf("disk size is invalid. Must in [%d, %d]", minDiskSize, maxDiskSize)
+	}
+
+	return createType, nil
+}
+
+func verifyDiskTypeIsSupported(inputDiskType string, diskSize uint64, diskQuotaResp *cbs.DescribeDiskConfigQuotaResponse) (string, error) {
+	for _, diskConfig := range diskQuotaResp.Response.DiskConfigSet {
+		if *diskConfig.Available && *diskConfig.DiskType == inputDiskType {
+			if diskSize < *diskConfig.MinDiskSize || diskSize > *diskConfig.MaxDiskSize {
+				return inputDiskType, fmt.Errorf("disk size is invalid. Must in [%d, %d]", *diskConfig.MinDiskSize, *diskConfig.MaxDiskSize)
+			}
+
+			return inputDiskType, nil
+		}
+	}
+
+	return "", nil
 }
