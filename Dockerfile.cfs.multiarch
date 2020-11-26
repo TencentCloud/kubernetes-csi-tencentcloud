@@ -1,0 +1,25 @@
+FROM docker.mirrors.ustc.edu.cn/library/golang:1.14 as builder
+
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+
+ADD . .
+
+ARG TARGETARCH
+
+RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH} go build -v -o csi-tencentcloud-cfs_${TARGETARCH} -a -ldflags '-extldflags "-static"' cmd/cfs/main.go
+
+
+
+FROM docker.mirrors.ustc.edu.cn/library/centos:7
+
+LABEL maintainers="TencentCloud TKE Authors"
+LABEL description="TencentCloud CFS CSI Plugin"
+
+ARG TARGETARCH
+
+# Copy cfsplugin from build _output directory
+COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-tencentcloud-cfs_${TARGETARCH} /csi-tencentcloud-cfs
+
+RUN yum -y install nfs-utils && yum -y install epel-release && yum -y install jq && yum clean all
+
+ENTRYPOINT ["/csi-tencentcloud-cfs"]
