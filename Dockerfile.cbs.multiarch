@@ -1,0 +1,22 @@
+FROM docker.mirrors.ustc.edu.cn/library/golang:1.14 as builder
+
+ADD . /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+ARG TARGETARCH
+
+RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH} go build -v -o /go/src/bin/csi-tencentcloud_${TARGETARCH} -a -ldflags '-extldflags "-static"' cmd/cbs/main.go
+
+
+
+FROM docker.mirrors.ustc.edu.cn/library/centos:7
+LABEL maintainers="TencentCloud TKE Authors"
+LABEL description="TencentCloud CBS CSI Plugin"
+
+ARG TARGETARCH
+
+RUN yum  install -y  e2fsprogs xfsprogs && yum clean all
+
+COPY --from=builder /go/src/bin/csi-tencentcloud_${TARGETARCH} /csi-tencentcloud-cbs
+RUN chmod +x /csi-tencentcloud-cbs
+CMD ["/csi-tencentcloud-cbs"]
