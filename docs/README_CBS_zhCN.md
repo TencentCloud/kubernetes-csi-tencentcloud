@@ -46,7 +46,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: csi-tencentcloud
+  name: cbs-csi-api-key
   namespace: kube-system
 data:
   # 需要注意的是,secret 的 value 需要进行 base64 编码

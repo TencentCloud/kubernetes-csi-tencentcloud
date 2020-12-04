@@ -43,7 +43,7 @@ We need know some notes before **Requirements**:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: csi-tencentcloud
+  name: cbs-csi-api-key
   namespace: kube-system
 data:
   # value need base64 encoding
