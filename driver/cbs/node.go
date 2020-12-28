@@ -30,7 +30,7 @@ var (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
 
-	defaultMaxAttachVolumePerNode = 20
+	defaultMaxAttachVolumePerNode = 18
 
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
