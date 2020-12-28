@@ -19,6 +19,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
@@ -214,10 +215,12 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 
 		if !found {
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "can not found valid prepaid period")
 		}
 
 		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenewd {
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "invalid renew flag")
 		}
 	}
@@ -225,10 +228,12 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	sizeGb := uint64(volumeCapacity / int64(GB))
 	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, sizeGb)
 	if err != nil {
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	if volumeType == "" {
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrDiskTypeNotAvaliable.Code).Inc()
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no available storage in zone: %s", volumeZone))
 	}
 
@@ -245,6 +250,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	if volumeEncrypt != "" && volumeEncrypt != EncryptEnable {
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 		return nil, status.Error(codes.InvalidArgument, "volume encrypt not valid")
 	}
 
@@ -280,12 +286,15 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	updateCbsClent(ctrl.cbsClient)
 	snapshotId := ""
 	if req.VolumeContentSource != nil {
+		sTimeForDescribeSnapshots := time.Now()
 		snapshot := req.VolumeContentSource.GetSnapshot()
 		if snapshot == nil {
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot cannot be empty")
 		}
 		snapshotId = snapshot.GetSnapshotId()
 		if len(snapshotId) == 0 {
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "Volume Snapshot ID cannot be empty")
 		}
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
@@ -293,9 +302,15 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 		listSnapshotResponse, err := ctrl.cbsClient.DescribeSnapshots(listSnapshotRequest)
 		if err != nil {
+			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots), "", util.GetTencentSdkErrCode(err)).Inc()
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.GetTencentSdkErrCode(err)).Inc()
 			return nil, status.Error(codes.Internal, err.Error())
 		}
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots), "", string(util.Success)).Inc()
+		metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots)).Observe(time.Since(sTimeForDescribeSnapshots).Seconds())
+
 		if len(listSnapshotResponse.Response.SnapshotSet) <= 0 {
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrSnapshotNotFound.Code).Inc()
 			return nil, status.Error(codes.NotFound, "Volume Snapshot not found")
 		}
 		createCbsReq.SnapshotId = &snapshotId
@@ -321,12 +336,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	glog.Infof("createCbsReq: %+v", createCbsReq)
 
+	sTimeForCreateDisks := time.Now()
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.CreateDisks), "", util.GetTencentSdkErrCode(err)).Inc()
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.CreateDisks), "", string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.CreateDisks)).Observe(time.Since(sTimeForCreateDisks).Seconds())
 
 	if len(createCbsResponse.Response.DiskIdSet) <= 0 {
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InternalErr)).Inc()
 		return nil, status.Errorf(codes.Internal, "create disk failed, no disk id found in create disk response, request id %s", *createCbsResponse.Response.RequestId)
 	}
 
@@ -342,13 +363,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	for {
 		select {
 		case <-ticker.C:
+			sTimeForDescribeDisks := time.Now()
 			listCbsRequest := cbs.NewDescribeDisksRequest()
 			listCbsRequest.DiskIds = []*string{&diskId}
 
 			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 			if err != nil {
+				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
 				continue
 			}
+			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", string(util.Success)).Inc()
+			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTimeForDescribeDisks).Seconds())
+
 			if len(listCbsResponse.Response.DiskSet) >= 1 {
 				for _, d := range listCbsResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
@@ -363,6 +389,10 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 								}
 							}
+
+							// record metric for create volume successfully
+							metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.Success)).Inc()
+
 							return &csi.CreateVolumeResponse{
 								Volume: &csi.Volume{
 									CapacityBytes: int64(*disk.DiskSize * GB),
@@ -384,6 +414,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 				}
 			}
 		case <-ctx.Done():
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrDiskCreatedTimeout.Code).Inc()
 			return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("cbs disk is not ready before deadline exceeded %s", diskId))
 		}
 	}
@@ -394,25 +425,35 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
 
+	sTime := time.Now()
 	describeDiskRequest := cbs.NewDescribeDisksRequest()
 	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
 	updateCbsClent(ctrl.cbsClient)
 	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Delete), util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
 
 	if len(describeDiskResponse.Response.DiskSet) <= 0 {
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
+	sTimeForTerminateDisks := time.Now()
 	terminateCbsRequest := cbs.NewTerminateDisksRequest()
 	terminateCbsRequest.DiskIds = []*string{&req.VolumeId}
-
 	_, err = ctrl.cbsClient.TerminateDisks(terminateCbsRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.TerminateDisks), "", util.GetTencentSdkErrCode(err)).Inc()
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Delete), util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.TerminateDisks), "", string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.TerminateDisks)).Observe(time.Since(sTimeForTerminateDisks).Seconds())
+	metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Delete), string(util.Success)).Inc()
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -435,12 +476,18 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
 	updateCbsClent(ctrl.cbsClient)
+	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
 
 	if len(listCbsResponse.Response.DiskSet) <= 0 {
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskNotFound.Code).Inc()
 		return nil, status.Error(codes.NotFound, "disk not found")
 	}
 
@@ -450,6 +497,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 				return &csi.ControllerPublishVolumeResponse{}, nil
 			}
 			if *disk.DiskState == StatusAttached && *disk.InstanceId != instanceId {
+				metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskAttachedAlready.Code).Inc()
 				return nil, status.Error(codes.FailedPrecondition, "disk is attach to another instance already")
 			}
 		}
@@ -458,11 +506,15 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	attachDiskRequest := cbs.NewAttachDisksRequest()
 	attachDiskRequest.DiskIds = []*string{&diskId}
 	attachDiskRequest.InstanceId = &instanceId
-
+	sTimeForAttachDisks := time.Now()
 	_, err = ctrl.cbsClient.AttachDisks(attachDiskRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks), diskId, string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks)).Observe(time.Since(sTimeForAttachDisks).Seconds())
 
 	ticker := time.NewTicker(time.Second * 5)
 
@@ -477,8 +529,12 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 
 			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 			if err != nil {
+				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
 				continue
 			}
+			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
+			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
+
 			if len(listCbsResponse.Response.DiskSet) >= 1 {
 				for _, d := range listCbsResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
@@ -489,6 +545,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 				}
 			}
 		case <-ctx.Done():
+			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskAttachedTimeout.Code).Inc()
 			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not attached before deadline exceeded")
 		}
 	}
@@ -507,10 +564,15 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
 	updateCbsClent(ctrl.cbsClient)
+	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
 
 	if len(listCbsResponse.Response.DiskSet) <= 0 {
 		// return nil, status.Error(codes.NotFound, "disk not found")
@@ -528,11 +590,15 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	detachDiskRequest := cbs.NewDetachDisksRequest()
 	detachDiskRequest.DiskIds = []*string{&diskId}
-
+	sTimeForDetachDisks := time.Now()
 	_, err = ctrl.cbsClient.DetachDisks(detachDiskRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Aborted, err.Error())
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks), diskId, string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks)).Observe(time.Since(sTimeForDetachDisks).Seconds())
 
 	ticker := time.NewTicker(time.Second * 5)
 
@@ -544,11 +610,16 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 		case <-ticker.C:
 			listCbsRequest := cbs.NewDescribeDisksRequest()
 			listCbsRequest.DiskIds = []*string{&diskId}
+			sTimeForDescribeDisks := time.Now()
 
 			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 			if err != nil {
+				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
 				continue
 			}
+			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
+			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTimeForDescribeDisks).Seconds())
+
 			if len(listCbsResponse.Response.DiskSet) >= 1 {
 				for _, d := range listCbsResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
@@ -559,6 +630,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 				}
 			}
 		case <-ctx.Done():
+			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.ErrDiskDetachedTimeout.Code).Inc()
 			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not unattached before deadline exceeded")
 		}
 	}
@@ -862,6 +934,7 @@ func (ctrl *cbsController) LoadExDataFromMetadataStore() error {
 }
 
 func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode string, diskSize uint64) (string, error) {
+	sTime := time.Now()
 	diskQuotaRequest := cbs.NewDescribeDiskConfigQuotaRequest()
 	diskQuotaRequest.InquiryType = common.StringPtr("INQUIRY_CBS_CONFIG")
 	diskQuotaRequest.Zones = common.StringPtrs([]string{zone})
@@ -869,15 +942,18 @@ func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode 
 	updateCbsClent(ctrl.cbsClient)
 	diskQuotaResp, err := ctrl.cbsClient.DescribeDiskConfigQuota(diskQuotaRequest)
 	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota), "", util.GetTencentSdkErrCode(err)).Inc()
+		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.GetTencentSdkErrCode(err)).Inc()
 		return "", err
 	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota), "", string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota)).Observe(time.Since(sTime).Seconds())
 
 	if inputDiskType == "cbs" {
 		return getDiskTypeForDefaultStorageClass(diskSize, diskQuotaResp)
 	}
 
 	return verifyDiskTypeIsSupported(inputDiskType, diskSize, diskQuotaResp)
-
 }
 
 func getDiskTypeForDefaultStorageClass(diskSize uint64, diskQuotaResp *cbs.DescribeDiskConfigQuotaResponse) (string, error) {

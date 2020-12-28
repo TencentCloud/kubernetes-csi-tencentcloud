@@ -23,6 +23,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
@@ -30,7 +31,7 @@ var (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
 
-	defaultMaxAttachVolumePerNode = 20
+	defaultMaxAttachVolumePerNode = 18
 
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
@@ -389,6 +390,7 @@ func findCBSVolume(diskId string) (device string, err error) {
 	stat, err := os.Lstat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
+			metrics.DevicePathNotExist.WithLabelValues(DriverName).Inc()
 			glog.Warningf("cbs block path %s not found. We will get device from serial(/sys/block/vdX/serail)", p)
 			deviceFromSerial, err := getDevicePathsBySerial(diskId)
 			if err != nil {
