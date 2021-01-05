@@ -18,18 +18,19 @@ const (
 )
 
 var (
-	endpoint = flag.String("endpoint", fmt.Sprintf("unix://plugin/csi.sock", cfs.DriverName), "CSI endpoint")
-	region   = flag.String("region", "", "tencent cloud api region")
-	zone     = flag.String("zone", "", "cvm instance region")
-	cfsUrl   = flag.String("cfs_url", "cfs.internal.tencentcloudapi.com", "cfs api domain")
-	nodeID   = flag.String("nodeID", "", "node ID")
+	endpoint         = flag.String("endpoint", fmt.Sprintf("unix://plugin/csi.sock", cfs.DriverName), "CSI endpoint")
+	region           = flag.String("region", "", "tencent cloud api region")
+	zone             = flag.String("zone", "", "cvm instance region")
+	cfsUrl           = flag.String("cfs_url", "cfs.internal.tencentcloudapi.com", "cfs api domain")
+	nodeID           = flag.String("nodeID", "", "node ID")
+	metadataEndpoint = flag.String("metadata_endpoint", "http://metadata.tencentyun.com/latest/meta-data", "metadata endpoint.")
 )
 
 func main() {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
+	metadataClient := metadata.NewMetaData(http.DefaultClient, *metadataEndpoint)
 
 	if *region == "" {
 		r, err := metadataClient.Region()

@@ -18,7 +18,7 @@ type Request struct {
 }
 
 const (
-	ENDPOINT = "http://metadata.tencentyun.com/latest/meta-data"
+	DefaultEndpoint = "http://metadata.tencentyun.com/latest/meta-data"
 
 	INSTANCE_ID  = "instance-id"
 	UUID         = "uuid"
@@ -51,12 +51,19 @@ type MetaData struct {
 	c IMetaDataClient
 }
 
-func NewMetaData(client *http.Client) *MetaData {
+func NewMetaData(client *http.Client, endpoint string) *MetaData {
 	if client == nil {
-		client = &http.Client{}
+		client = http.DefaultClient
+	}
+
+	if endpoint == "" {
+		endpoint = DefaultEndpoint
 	}
 	return &MetaData{
-		c: &MetaDataClient{client: client},
+		c: &MetaDataClient{
+			client:   client,
+			endpoint: endpoint,
+		},
 	}
 }
 
@@ -125,6 +132,7 @@ func (m *MetaData) Zone() (string, error) {
 
 //
 type MetaDataClient struct {
+	endpoint string
 	resource string
 	client   *http.Client
 }
@@ -138,7 +146,7 @@ func (m *MetaDataClient) Url() (string, error) {
 	if m.resource == "" {
 		return "", errors.New("the resource you want to visit must not be nil!")
 	}
-	return fmt.Sprintf("%s/%s", ENDPOINT, m.resource), nil
+	return fmt.Sprintf("%s/%s", m.endpoint, m.resource), nil
 }
 
 func (m *MetaDataClient) send() (string, error) {

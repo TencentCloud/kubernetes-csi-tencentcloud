@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
@@ -26,14 +27,16 @@ type Driver struct {
 	// TKE cluster ID
 	clusterId         string
 	volumeAttachLimit int64
+	metadataClient    *metadata.MetaData
 }
 
-func NewDriver(region, zone, clusterId string, volumeAttachLimit int64) (*Driver, error) {
+func NewDriver(region, zone, clusterId string, volumeAttachLimit int64, metadataClient *metadata.MetaData) (*Driver, error) {
 	driver := Driver{
 		zone:              zone,
 		region:            region,
 		clusterId:         clusterId,
 		volumeAttachLimit: volumeAttachLimit,
+		metadataClient:    metadataClient,
 	}
 
 	return &driver, nil
@@ -54,7 +57,7 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 		return err
 	}
 
-	node, err := newCbsNode(drv.region, drv.volumeAttachLimit)
+	node, err := newCbsNode(drv.region, drv.volumeAttachLimit, drv.metadataClient)
 	if err != nil {
 		return err
 	}

@@ -27,14 +27,15 @@ import (
 )
 
 var (
-	endpoint   = flag.String("endpoint", "unix://csi/csi.sock", "CSI endpoint")
-	driverName = flag.String("drivername", "com.tencent.cloud.csi.cosfs", "name of the driver")
-	nodeID     = flag.String("nodeid", "", "node id")
+	endpoint         = flag.String("endpoint", "unix://csi/csi.sock", "CSI endpoint")
+	driverName       = flag.String("drivername", "com.tencent.cloud.csi.cosfs", "name of the driver")
+	nodeID           = flag.String("nodeid", "", "node id")
+	metadataEndpoint = flag.String("metadata_endpoint", "http://metadata.tencentyun.com/latest/meta-data", "metadata endpoint.")
 )
 
 func main() {
 	flag.Parse()
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
+	metadataClient := metadata.NewMetaData(http.DefaultClient, *metadataEndpoint)
 
 	if *nodeID == "" {
 		n, err := metadataClient.InstanceID()

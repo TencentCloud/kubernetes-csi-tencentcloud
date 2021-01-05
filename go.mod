@@ -24,6 +24,7 @@ require (
 )
 
 replace (
+	github.com/dbdd4us/qcloudapi-sdk-go => github.com/pavlelee/qcloudapi-sdk-go v0.0.0-20210105063735-a452e603e89a
 	k8s.io/api => k8s.io/api v0.18.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.18.2
 	k8s.io/apimachinery => k8s.io/apimachinery v0.18.2

@@ -3,7 +3,6 @@ package cbs
 import (
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ type cbsNode struct {
 }
 
 // TODO  node plugin need idempotent and should use inflight
-func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
+func newCbsNode(region string, volumeAttachLimit int64, metadataClient *metadata.MetaData) (*cbsNode, error) {
 	secretID, secretKey, token, _ := util.GetSercet()
 	cred := &common.Credential{
 		SecretId:  secretID,
@@ -62,7 +61,7 @@ func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
 	}
 
 	node := cbsNode{
-		metadataClient: metadata.NewMetaData(http.DefaultClient),
+		metadataClient: metadataClient,
 		cbsClient:      client,
 		mounter: mount.SafeFormatAndMount{
 			Interface: mount.New(""),

@@ -27,13 +27,14 @@ var (
 	zone              = flag.String("zone", "", "cvm instance region")
 	cbsUrl            = flag.String("cbs_url", "cbs.internal.tencentcloudapi.com", "cbs api domain")
 	volumeAttachLimit = flag.Int64("volume_attach_limit", -1, "Value for the maximum number of volumes attachable for all nodes. If the flag is not specified then the value is default 20.")
+	metadataEndpoint  = flag.String("metadata_endpoint", "http://metadata.tencentyun.com/latest/meta-data", "metadata endpoint.")
 )
 
 func main() {
 	flag.Parse()
 	defer glog.Flush()
 
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
+	metadataClient := metadata.NewMetaData(http.DefaultClient, *metadataEndpoint)
 
 	if *region == "" {
 		r, err := metadataClient.Region()
@@ -61,7 +62,7 @@ func main() {
 
 	cp := util.NewCachePersister()
 
-	drv, err := cbs.NewDriver(*region, *zone, os.Getenv(ClusterId), *volumeAttachLimit)
+	drv, err := cbs.NewDriver(*region, *zone, os.Getenv(ClusterId), *volumeAttachLimit, metadataClient)
 	if err != nil {
 		glog.Fatal(err)
 	}
