@@ -3,15 +3,19 @@ package cbs
 import (
 	"context"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
-	"google.golang.org/grpc"
-
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -69,6 +73,18 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 		}
 		return resp, err
 	}
+
+	// expose driver metrics
+	metrics.RegisterMetrics()
+	http.Handle("/metrics", promhttp.Handler())
+	address := ":9099"
+	glog.Infof("Starting metrics server at %s\n", address)
+	go wait.Forever(func() {
+		err := http.ListenAndServe(address, nil)
+		if err != nil {
+			glog.Errorf("Failed to listen on %s: %v", address, err)
+		}
+	}, 5*time.Second)
 
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(logGRPC),

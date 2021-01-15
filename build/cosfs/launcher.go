@@ -7,10 +7,12 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
@@ -35,6 +37,12 @@ func main() {
 
 	mount := r.Path("/mount").Subrouter()
 	mount.Methods("POST").HandlerFunc(mountHandler)
+
+	go func() {
+		if err := http.ListenAndServe(":8080", nil); err != nil {
+			glog.Error(err)
+		}
+	}()
 
 	server := http.Server{
 		Handler: r,
@@ -95,6 +103,24 @@ func launcherHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Errorln(extraFields["errmsg"])
 		generateHttpResponse(w, "failure", http.StatusBadRequest, extraFields)
 		return
+	}
+
+	items := strings.Split(cmd, " ")
+	if items[0] == "umount" {
+		mounter := mount.New("")
+		notMnt, err := mounter.IsLikelyNotMountPoint(items[len(items)-1])
+		if err != nil {
+			extraFields["errmsg"] = fmt.Sprintf("check IsLikelyNotMountPoint failed. %v", err)
+			glog.Errorln(extraFields["errmsg"])
+			generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
+			return
+		}
+
+		if notMnt {
+			glog.Infof("%s not mounted, assume umount success.", items[len(items)-1])
+			generateHttpResponse(w, "success", http.StatusOK, extraFields)
+			return
+		}
 	}
 
 	if err := execCmd(cmd); err != nil {
