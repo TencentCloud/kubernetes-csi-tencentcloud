@@ -17,9 +17,12 @@ limitations under the License.
 package cfs
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
@@ -27,9 +30,14 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gotest.tools/gotestsum/log"
 	"k8s.io/utils/mount"
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+)
+
+const (
+	nfsPort = "2049"
 )
 
 type nodeServer struct {
@@ -75,6 +83,14 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if opt.Server == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
 	}
+
+	// check network connection
+	conn, err := net.DialTimeout("tcp", opt.Server+":"+nfsPort, time.Second*time.Duration(3))
+	if err != nil {
+		log.Errorf("CFS: Cannot connect to nfs host: %s", opt.Server)
+		return nil, errors.New("CFS: Cannot connect to nfs host: " + opt.Server)
+	}
+	defer conn.Close()
 
 	//check path
 	if opt.Path == "" {
