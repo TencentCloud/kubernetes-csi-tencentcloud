@@ -14,11 +14,11 @@ rules:
     resources: ["events", "persistentvolumes"]
     verbs: ["get", "list", "watch", "update"]
   - apiGroups: [""]
-    resources: ["nodes"]
+    resources: ["nodes", "pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["storage.k8s.io"]
-    resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
+    resources: ["volumeattachments", "volumeattachments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
 
 ---
 kind: ClusterRoleBinding
