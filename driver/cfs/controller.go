@@ -56,7 +56,8 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	glog.Infof("req.name is :  %s   ", req.Name)
 
 	var zone, storageType, pgroupID, vpcID, subnetID string
-
+        
+	cfsTags := []*cfsv3.TagInfo{}
 	for k, v := range parameters {
 		switch strings.ToLower(k) {
 		case "zone":
@@ -69,10 +70,24 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			vpcID = v
 		case "subnetid":
 			subnetID = v
+                case "resourcetags":
+			tags := strings.Split(v, ",")
+			for _, tag := range tags {
+				kv := strings.Split(tag, ":")
+				if kv == nil || len(kv) != 2 {
+					continue
+				}
+				cfsTags = append(cfsTags, &cfsv3.TagInfo{
+					TagKey:   &kv[0],
+					TagValue: &kv[1],
+				})
+			}
 		}
 	}
 
 	request := cfsv3.NewCreateCfsFileSystemRequest()
+        
+        request.ResourceTags = cfsTags
 
 	if storageType != "" {
 		request.StorageType = common.StringPtr(storageType)
