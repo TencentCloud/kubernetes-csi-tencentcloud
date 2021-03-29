@@ -96,12 +96,14 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 * diskChargeTypePrepaidPeriod：代表购买云盘的时长，当付费类型为 `PREPAID` 时需要指定，可选的值包括 `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`，单位为月
 * diskChargePrepaidRenewFlag: 代表云盘的自动续费策略，当付费类型为 `PREPAID` 时需要指定，值为`NOTIFY_AND_AUTO_RENEW` 代表通知过期且自动续费，值为 `NOTIFY_AND_MANUAL_RENEW` 代表通知过期不自动续费，值为 `DISABLE_NOTIFY_AND_MANUAL_RENEW` 代表不通知过期不自动续费
 * encrypt: 代表云盘是否加密，当指定此参数时，唯一可选的值为 `ENCRYPT`
+* disktags: 可以给云盘加tag。形式如 `a:b,c:d`
+* throughputperformance: 对hssd/tssd盘，如果需要达到最大性能，可以填入额外性能。具体取值参见https://cloud.tencent.com/document/product/362/51896
 
 ## 不同类型云盘的大小限制
 
-* 普通云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，支持 40-100MB/s 的 IO 吞吐性能和 数百-1000 的随机 IOPS 性能。
-* 高性能云硬盘提供最小 50 GB 到最大 16000 GB 的规格选择。
-* SSD 云硬盘提供最小 100 GB 到最大 16000 GB 的规格选择，单块 SSD 云硬盘最高可提供 24000 随机读写IOPS、260MB/s吞吐量的存储性能。
+* 高性能云硬盘提供最小 10 GB 到最大 32000 GB 的规格选择。
+* SSD云硬盘提供最小 20 GB 到最大 32000 GB 的规格选择，单块 SSD 云硬盘最高可提供 26000 随机读写IOPS、260MB/s吞吐量的存储性能。
+* 增强型SSD云硬盘提供最小 20 GB 到最大 32000 GB 的规格选择，单盘最高可提供 100000 随机读写IOPS、1000MB/s吞吐量的存储性能。
 
 
 ## 反馈和建议
