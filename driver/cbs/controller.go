@@ -29,6 +29,9 @@ var (
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
 	DiskTypeCloudSsd     = "CLOUD_SSD"
+	DiskTypeCloudHSSD     = "CLOUD_HSSD"
+	DiskTypeCloudTSSD     = "CLOUD_TSSD"
+
 
 	DiskTypeDefault = DiskTypeCloudPremium
 
@@ -151,6 +154,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	volumeChargePrepaidPeriod := 1
 	projectId := 0
 	volumeTags := make([]*cbs.Tag, 0)
+	throughputPerformance := 0
 	for k, v := range req.Parameters {
 		switch strings.ToLower(k) {
 		case "aspid":
@@ -186,6 +190,12 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 					Key:   &kv[0],
 					Value: &kv[1],
 				})
+			}
+		case "throughputperformance":
+			var err error
+			throughputPerformance, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Infof("throughputPerformance atoi error: %v", err)
 			}
 		default:
 		}
@@ -265,6 +275,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
 	createCbsReq.DiskSize = &size
+
+	if (volumeType == DiskTypeCloudHSSD || volumeType == DiskTypeCloudTSSD) && throughputPerformance != 0 {
+		tpUnit64 := uint64(throughputPerformance)
+		createCbsReq.ThroughputPerformance = &tpUnit64
+	}
 
 	if volumeChargeType == DiskChargeTypePrePaid {
 		period := uint64(volumeChargePrepaidPeriod)

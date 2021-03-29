@@ -94,9 +94,11 @@ restore:
 * diskChargeTypePrepaidPeriod：`1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`
 * diskChargePrepaidRenewFlag: If diskType is `PREPAID`, `NOTIFY_AND_AUTO_RENEW`, `NOTIFY_AND_MANUAL_RENEW`, `DISABLE_NOTIFY_AND_MANUAL_RENEW`.
 * encrypt: if need encrypt in cbs, `ENCRYPT` is only one value.
+* disktags: add tags to cbs volume. e.g. `a:b,c:d`
+* throughputperformance: if need extra performance for hssd/tssd. e.g. `100`. https://cloud.tencent.com/document/product/362/51896
 
 ## cbs volume size limit, need pvc or pv
 
-* `CLOUD_BASIC`: 10GB-16000GB
-* `CLOUD_PREMIUM`: 10GB-16000GB
-* `CLOUD_SSD`: 100G-16000GB
+* `CLOUD_PREMIUM`: 10GB-32000GB
+* `CLOUD_SSD`: 20G-32000GB
+* `CLOUD_HSSD`: 20G-32000GB
