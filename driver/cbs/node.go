@@ -440,7 +440,7 @@ func getDevicePathsBySerial(diskId string) (string, error) {
 				return "", err
 			}
 
-			if string(content) == diskId {
+			if strings.Trim(string(content), " ") == diskId {
 				arr := strings.Split(dir, "/")
 				return filepath.Join("/dev/", arr[len(arr)-1]), nil
 			}
