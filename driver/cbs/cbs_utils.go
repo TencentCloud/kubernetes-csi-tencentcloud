@@ -6,6 +6,7 @@ import (
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 )
 
@@ -52,6 +53,19 @@ func updateCbsClent(client *cbs.Client) *cbs.Client {
 	secretID, secretKey, token, isTokenUpdate := util.GetSercet()
 	if token != "" && isTokenUpdate {
 		cred := common.Credential{
+			SecretId:  secretID,
+			SecretKey: secretKey,
+			Token:     token,
+		}
+		client.WithCredential(&cred)
+	}
+	return client
+}
+
+func updateCvmClent(client *cvm.Client) *cvm.Client {
+	secretID, secretKey, token, isTokenUpdate := util.GetSercet()
+	if token != "" && isTokenUpdate {
+		cred := common.Credential {
 			SecretId:  secretID,
 			SecretKey: secretKey,
 			Token:     token,

@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 
@@ -98,6 +99,7 @@ var (
 
 type cbsController struct {
 	cbsClient     *cbs.Client
+	cvmClient         *cvm.Client
 	zone          string
 	clusterId     string
 	metadataStore util.CachePersister
@@ -117,9 +119,17 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 	if err != nil {
 		return nil, err
 	}
+	cvmcpf := profile.NewClientProfile()
+	cvmcpf.HttpProfile.Endpoint = "cvm.tencentcloudapi.com"
+	cvmClient, err := cvm.NewClient(cred, region, cvmcpf)
+	if err != nil {
+		return nil, err
+	}
+
 
 	return &cbsController{
 		cbsClient:     client,
+		cvmClient:     cvmClient,
 		zone:          zone,
 		clusterId:     clusterId,
 		metadataStore: cachePersister,
@@ -215,6 +225,24 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if volumeZone == "" {
 		volumeZone = ctrl.zone
 	}
+
+	updateCvmClent(ctrl.cvmClient)
+	// If zone param not prefix with ap-,
+	if !strings.HasPrefix(volumeZone, "ap-") {
+	request := cvm.NewDescribeZonesRequest()
+		response, err := ctrl.cvmClient.DescribeZones(request)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Tencent SDK API return error: %v", err.Error())
+		}
+		for _, z := range response.Response.ZoneSet {
+			if *z.ZoneId == volumeZone {
+				fmt.Printf("%v  \n", z)
+				volumeZone = *z.Zone
+				break
+			}
+		}
+	}
+
 
 	if volumeChargeType == DiskChargeTypePrePaid {
 		found := false
