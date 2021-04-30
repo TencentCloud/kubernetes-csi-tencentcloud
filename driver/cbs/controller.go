@@ -226,17 +226,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		volumeZone = ctrl.zone
 	}
 
-	updateCvmClent(ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	// If zone param not prefix with ap-,
+	glog.Infof("tencent zone: %v", volumeZone)
 	if !strings.HasPrefix(volumeZone, "ap-") {
-	request := cvm.NewDescribeZonesRequest()
+		request := cvm.NewDescribeZonesRequest()
 		response, err := ctrl.cvmClient.DescribeZones(request)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Tencent SDK API return error: %v", err.Error())
 		}
 		for _, z := range response.Response.ZoneSet {
 			if *z.ZoneId == volumeZone {
-				fmt.Printf("%v  \n", z)
+				glog.Infof("volume cbs zone convert %v to %v", volumeZone, *z.Zone)
 				volumeZone = *z.Zone
 				break
 			}
@@ -326,7 +327,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		ProjectId: common.Uint64Ptr(uint64(projectId)),
 	}
 
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	snapshotId := ""
 	if req.VolumeContentSource != nil {
 		sTimeForDescribeSnapshots := time.Now()
@@ -471,7 +472,7 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	sTime := time.Now()
 	describeDiskRequest := cbs.NewDescribeDisksRequest()
 	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
@@ -518,7 +519,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
@@ -606,7 +607,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
@@ -723,7 +724,7 @@ func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.
 	// check size
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -793,7 +794,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}
 	sourceVolumeId := req.GetSourceVolumeId()
 	snapshotName := req.GetName()
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 
 	if cbsSnap, err := getCbsSnapshotByName(snapshotName); err == nil {
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
@@ -911,7 +912,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 
 	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
 
 	if err != nil {
@@ -982,7 +983,7 @@ func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode 
 	diskQuotaRequest.InquiryType = common.StringPtr("INQUIRY_CBS_CONFIG")
 	diskQuotaRequest.Zones = common.StringPtrs([]string{zone})
 	diskQuotaRequest.DiskChargeType = common.StringPtr(paymode)
-	updateCbsClent(ctrl.cbsClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	diskQuotaResp, err := ctrl.cbsClient.DescribeDiskConfigQuota(diskQuotaRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota), "", util.GetTencentSdkErrCode(err)).Inc()
