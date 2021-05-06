@@ -1,4 +1,4 @@
-FROM docker.mirrors.ustc.edu.cn/library/golang:1.14 as builder
+FROM golang:1.14 as builder
 
 ADD . /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 
@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH} go build -v -o /go/src/bin/cs
 
 
 
-FROM docker.mirrors.ustc.edu.cn/library/centos:7
+FROM centos:7
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud CBS CSI Plugin"
 
