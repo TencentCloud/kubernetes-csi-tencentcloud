@@ -1,0 +1,24 @@
+FROM golang:1.14.1-stretch as builder
+
+ADD . /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+
+WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
+ARG TARGETARCH
+
+RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH}  go build -v -o /go/src/bin/csi-tencentcloud_${TARGETARCH} -a -ldflags '-extldflags "-static"' /chdfs/chdfs/main.go
+
+
+
+FROM ccr.ccs.tencentyun.com/ccs-dev/chdfs-fuse:v1.0.0
+
+LABEL maintainers="TencentCloud TKE Authors"
+LABEL description="TencentCloud CHDFS CSI Plugin"
+
+ARG TARGETARCH
+
+COPY --from=builder /go/src/bin/csi-tencentcloud_${TARGETARCH} /bin/csi-chdfs
+COPY build/chdfs/chdfs/chdfs-csi.sh /chdfs-csi.sh
+
+RUN chmod +x /chdfs-csi.sh
+
+ENTRYPOINT ["/chdfs-csi.sh"]
