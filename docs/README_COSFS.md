@@ -42,7 +42,11 @@ Your Kubernetes cluster must allow privileged pods (i.e. `--allow-privileged` fl
 YAML manifests are located in [deploy/cosfs/kubernetes](/deploy/cosfs/kubernetes). Those manifests deploy service accounts, cluster roles and cluster role bindings.
 
 **Deploy CSI external components:**
-
+* If your k8s version >= 1.14
+```bash
+kubectl create -f deploy/cosfs/kubernetes/coscsidriver.yaml
+```
+* If your k8s version < 1.14
 ```bash
 kubectl create -f deploy/cosfs/kubernetes/cosattacher.yaml
 ```
