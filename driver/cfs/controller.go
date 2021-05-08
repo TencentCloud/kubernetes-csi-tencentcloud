@@ -3,6 +3,7 @@ package cfs
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -109,7 +110,12 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		request.Zone = common.StringPtr(cs.zone)
 	}
 
-	request.FsName = common.StringPtr(name)
+	clusterId := os.Getenv("CLUSTER_ID")
+	fsName := name
+	if clusterId != "" {
+		fsName = fmt.Sprintf("%s_%s", clusterId, name)
+	}
+	request.FsName = common.StringPtr(fsName)
 	request.Protocol = common.StringPtr(CFSDefaultProtocol)
 
 	if vpcID == "" {
