@@ -43,11 +43,17 @@ kubectl apply -f  deploy/cfs/kubernetes/csi-cfs-rbac.yaml
 
 ### controller,node plugin
 
+**If your k8s version >= 1.14**
+```yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-cfs-csidriver.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin.yaml
+```
+**If your k8s version < 1.14**
 ```yaml
 kubectl apply -f  deploy/cfs/kubernetes/csi-attacher-cfsplugin.yaml
 kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin.yaml
 kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin.yaml
-
 ```
 
 ### examples
