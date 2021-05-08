@@ -1,0 +1,108 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-chdfsplugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-chdfsplugin
+  template:
+    metadata:
+      labels:
+        app: csi-chdfsplugin
+    spec:
+      serviceAccount: csi-chdfs-tencentcloud
+      hostNetwork: true
+      containers:
+        - name: driver-registrar
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-node-driver-registrar:1.0.2
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "rm -rf /registration/com.tencent.cloud.csi.chdfs /registration/com.tencent.cloud.csi.chdfs-reg.sock"]
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/com.tencent.cloud.csi.chdfs/csi.sock"
+          env:
+            - name: ADDRESS
+              value: /plugin/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /plugin
+            - name: registration-dir
+              mountPath: /registration
+        - name: chdfs
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-plugin-chdfs:v1.0.0
+          args:
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://plugin/csi.sock
+            - name: TENCENTCLOUD_CBS_API_SECRET_ID
+              valueFrom:
+                secretKeyRef:
+                  name: csi-tencentcloud
+                  key: TENCENTCLOUD_CBS_API_SECRET_ID
+            - name: TENCENTCLOUD_CBS_API_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: csi-tencentcloud
+                  key: TENCENTCLOUD_CBS_API_SECRET_KEY
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: launcher-socket-dir
+              mountPath: /tmp
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+            - name: plugin-dir
+              mountPath: /plugin
+            - mountPath: /dev
+              name: host-dev
+            - mountPath: /sys
+              name: host-sys
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
+      volumes:
+        - name: launcher-socket-dir
+          hostPath:
+            path: /etc/csi-chdfs
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.chdfs
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: host-dev
+          hostPath:
+            path: /dev
+        - name: host-sys
+          hostPath:
+            path: /sys
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
