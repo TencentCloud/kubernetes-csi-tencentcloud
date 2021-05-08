@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chdfs-config
+  namespace: kube-system
+data:
+  chdfs: |
+    [proxy]
+    url="http://XXXX-XXXX.chdfs.ap-shanghai.myqcloud.com"
+
+    [client]
+    mount-point="XXXX-XXXX"
+    renew-session-lease-time-sec=10
+
+    [cache]
+    update-sts-time-sec=30
+    cos-client-timeout-sec=5
+    inode-attr-expired-time-sec=30
+
+    [cache.read]
+    block-expired-time-sec=10
+    max-block-num=256
+    read-ahead-block-num=15
+    max-cos-load-qps=1024
+    load-thread-num=128
+    select-thread-num=64
+    rand-read=false
+
+    [cache.write]
+    max-mem-table-range-num=32
+    max-mem-table-size-mb=64
+    max-cos-flush-qps=256
+    flush-thread-num=128
+    commit-queue-len=100
+    max-commit-heap-size=500
+    auto-merge=true
+    auto-sync=false
+    auto-sync-time-ms=1000
+
+    [log.file]
+    filename="/log/chdfs.log"
+    log-rotate=true
+    max-size=2000
+    max-days=7
+    max-backups=100
