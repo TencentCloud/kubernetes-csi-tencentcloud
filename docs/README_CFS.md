@@ -71,6 +71,8 @@ kubectl create -f deploy/cfs/examples/dynamic-provison-allinone.yaml
 
 #### Static Volume Provisioning
 
+**Note**: `volumeHandle` in PV must be unique.
+
 ```yaml
 kubectl create -f deploy/cfs/examples/static-allinone.yaml
 ```
