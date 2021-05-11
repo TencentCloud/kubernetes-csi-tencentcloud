@@ -30,7 +30,7 @@ spec:
       serviceAccount: csi-cfs-tencentcloud
       containers:
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-attacher:1.0.1
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-attacher:1.0.1
           args:
             - "--v=3"
             - "--csi-address=$(ADDRESS)"
@@ -42,7 +42,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfs:1.0.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:1.0.0
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"

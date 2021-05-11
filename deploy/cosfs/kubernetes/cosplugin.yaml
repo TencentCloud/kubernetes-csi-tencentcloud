@@ -19,7 +19,7 @@ spec:
       hostNetwork: true
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-node-driver-registrar:1.0.2
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:1.0.2
           lifecycle:
             preStop:
               exec:
@@ -46,7 +46,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cos:1.0.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cos:1.0.0
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
