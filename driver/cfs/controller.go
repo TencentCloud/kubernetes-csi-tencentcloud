@@ -29,6 +29,13 @@ var (
 	GB                     = 1 << (10 * 3)
 )
 
+const (
+	// 通用性能型
+	StorageTypeHP = "HP"
+	// 通用标准型
+	StorageTypeSD = "SD"
+)
+
 type controllerServer struct {
 	*csicommon.DefaultControllerServer
 	cfsClient *cfsv3.Client
@@ -215,14 +222,45 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Errorf(codes.InvalidArgument, "invalid delete volume request: %v", req)
 	}
 
-	request := cfsv3.NewDeleteCfsFileSystemRequest()
-	request.FileSystemId = common.StringPtr(req.VolumeId)
 	updateCfsClent(cs.cfsClient)
-	_, err := cs.cfsClient.DeleteCfsFileSystem(request)
 
+	cfsID := common.StringPtr(req.VolumeId)
+	descReq := cfsv3.NewDescribeCfsFileSystemsRequest()
+	descReq.FileSystemId = cfsID
+
+	descResp, err := cs.cfsClient.DescribeCfsFileSystems(descReq)
 	if err != nil {
+		glog.Errorf("DescribeCfsFileSystems %v failed: %v", *cfsID, err)
+		return nil, err
+	}
+
+	if descResp.Response != nil && len(descResp.Response.FileSystems) <= 0 {
+		glog.Infof("Can not find filesystem %v, assume it is deleted successfully.", req.VolumeId)
+		return &csi.DeleteVolumeResponse{}, nil
+	}
+
+	isHPFileSystem := false
+	for _, f := range descResp.Response.FileSystems {
+		if *f.StorageType == StorageTypeHP {
+			isHPFileSystem = true
+		}
+	}
+
+	// 如果是性能型文件系统，先删除挂载点
+	if isHPFileSystem {
+		if err := cs.deleteMountTargetsForHPFileSystem(cfsID); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		glog.Infof("%v is HP filesystem, we have deleted its mountTargets.", req.VolumeId)
+	}
+
+	request := cfsv3.NewDeleteCfsFileSystemRequest()
+	request.FileSystemId = cfsID
+
+	if _, err := cs.cfsClient.DeleteCfsFileSystem(request); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	glog.Infof("we have deleted the cfs filesystem %v.", req.VolumeId)
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -242,4 +280,28 @@ func updateCfsClent(client *cfsv3.Client) *cfsv3.Client {
 		client.WithCredential(&cred)
 	}
 	return client
+}
+
+func (cs *controllerServer) deleteMountTargetsForHPFileSystem(cfsID *string) error {
+	mountTargetReq := cfsv3.NewDescribeMountTargetsRequest()
+	mountTargetReq.FileSystemId = cfsID
+
+	mountTargetResp, err := cs.cfsClient.DescribeMountTargets(mountTargetReq)
+	if err != nil {
+		glog.Errorf("DescribeMountTargets %v failed: %v", *cfsID, err)
+		return err
+	}
+	if mountTargetResp.Response != nil && len(mountTargetResp.Response.MountTargets) >= 1 {
+		for _, mt := range mountTargetResp.Response.MountTargets {
+			deleteReq := cfsv3.NewDeleteMountTargetRequest()
+			deleteReq.FileSystemId = mt.FileSystemId
+			deleteReq.MountTargetId = mt.MountTargetId
+			if _, err := cs.cfsClient.DeleteMountTarget(deleteReq); err != nil {
+				glog.Errorf("DeleteMountTarget %v, %v failed: %v", mt.FileSystemId, mt.MountTargetId, err)
+				return err
+			}
+		}
+	}
+
+	return nil
 }
