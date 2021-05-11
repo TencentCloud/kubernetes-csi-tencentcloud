@@ -30,7 +30,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gotest.tools/gotestsum/log"
 	"k8s.io/utils/mount"
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
@@ -87,7 +86,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	// check network connection
 	conn, err := net.DialTimeout("tcp", opt.Server+":"+nfsPort, time.Second*time.Duration(3))
 	if err != nil {
-		log.Errorf("CFS: Cannot connect to nfs host: %s", opt.Server)
+		glog.Errorf("CFS: Cannot connect to nfs host: %s", opt.Server)
 		return nil, errors.New("CFS: Cannot connect to nfs host: " + opt.Server)
 	}
 	defer conn.Close()
