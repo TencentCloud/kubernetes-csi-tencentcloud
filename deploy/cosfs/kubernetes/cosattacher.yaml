@@ -29,7 +29,7 @@ spec:
       serviceAccount: csi-cos-tencentcloud
       containers:
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-attacher:1.0.1
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-attacher:1.0.1
           args:
             - "--v=3"
             - "--csi-address=$(ADDRESS)"
@@ -41,7 +41,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cosfs
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cos:1.0.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cos:1.0.0
           env:
             - name: NODE_ID
               valueFrom:
