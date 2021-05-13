@@ -14,7 +14,6 @@ spec:
       labels:
         app: cbs-csi-controller
     spec:
-      hostNetwork: true
       serviceAccountName: cbs-csi-controller-sa
       priorityClassName: system-cluster-critical
       containers:
