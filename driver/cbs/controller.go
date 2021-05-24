@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
+	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
@@ -30,9 +30,8 @@ var (
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
 	DiskTypeCloudSsd     = "CLOUD_SSD"
-	DiskTypeCloudHSSD     = "CLOUD_HSSD"
-	DiskTypeCloudTSSD     = "CLOUD_TSSD"
-
+	DiskTypeCloudHSSD    = "CLOUD_HSSD"
+	DiskTypeCloudTSSD    = "CLOUD_TSSD"
 
 	DiskTypeDefault = DiskTypeCloudPremium
 
@@ -99,7 +98,7 @@ var (
 
 type cbsController struct {
 	cbsClient     *cbs.Client
-	cvmClient         *cvm.Client
+	cvmClient     *cvm.Client
 	zone          string
 	clusterId     string
 	metadataStore util.CachePersister
@@ -125,7 +124,6 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 	if err != nil {
 		return nil, err
 	}
-
 
 	return &cbsController{
 		cbsClient:     client,
@@ -157,7 +155,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	var aspId, volumeZone string
+	var aspId, volumeZone, cdcId string
 	inputVolumeType := DiskTypeDefault
 	volumeChargeType := DiskChargeTypeDefault
 	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
@@ -207,6 +205,8 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			if err != nil {
 				glog.Infof("throughputPerformance atoi error: %v", err)
 			}
+		case "cdcid":
+			cdcId = v
 		default:
 		}
 	}
@@ -243,7 +243,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			}
 		}
 	}
-
 
 	if volumeChargeType == DiskChargeTypePrePaid {
 		found := false
@@ -325,6 +324,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	createCbsReq.Placement = &cbs.Placement{
 		Zone:      &volumeZone,
 		ProjectId: common.Uint64Ptr(uint64(projectId)),
+		CdcId:     &cdcId,
 	}
 
 	updateClient(ctrl.cbsClient, ctrl.cvmClient)
