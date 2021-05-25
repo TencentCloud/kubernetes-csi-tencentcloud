@@ -91,13 +91,14 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 **Note**：可以参考[示例](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
 
 * 如果您集群中的节点存在多个可用区，那么您可以开启cbs存储卷的拓扑感知调度，需要在storageclass中添加`volumeBindingMode: WaitForFirstConsumer`，如deploy/examples/storageclass-topology.yaml，否则可能会出现cbs存储卷因跨可用区而挂载失败。
-* diskType: 代表要创建的 cbs 盘的类型；值为 `CLOUD_BASIC` 代表创建普通云盘，值为 `CLOUD_PREMIUM` 代表创建高性能云盘，值为 `CLOUD_SSD` 代表创建 ssd 云盘
+* diskType: 代表要创建的 cbs 盘的类型；值为 `CLOUD_PREMIUM` 代表创建高性能云盘，值为 `CLOUD_SSD` 代表创建 ssd 云盘，值为 `CLOUD_HSSD` 代表创建增强型SSD云盘，
 * diskChargeType: 代表云盘的付费类型；值为 `PREPAID` 代表预付费，值为 `POSTPAID_BY_HOUR` 代表按量付费，需要注意的是，当值为 `PREPAID` 的时候需要指定额外的参数
 * diskChargeTypePrepaidPeriod：代表购买云盘的时长，当付费类型为 `PREPAID` 时需要指定，可选的值包括 `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`，单位为月
 * diskChargePrepaidRenewFlag: 代表云盘的自动续费策略，当付费类型为 `PREPAID` 时需要指定，值为`NOTIFY_AND_AUTO_RENEW` 代表通知过期且自动续费，值为 `NOTIFY_AND_MANUAL_RENEW` 代表通知过期不自动续费，值为 `DISABLE_NOTIFY_AND_MANUAL_RENEW` 代表不通知过期不自动续费
 * encrypt: 代表云盘是否加密，当指定此参数时，唯一可选的值为 `ENCRYPT`
 * disktags: 可以给云盘加tag。形式如 `a:b,c:d`
 * throughputperformance: 对hssd/tssd盘，如果需要达到最大性能，可以填入额外性能。具体取值参见https://cloud.tencent.com/document/product/362/51896
+* cdcid: 独占集群ID
 
 ## 不同类型云盘的大小限制
 
