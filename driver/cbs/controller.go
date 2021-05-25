@@ -328,6 +328,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		ProjectId: common.Uint64Ptr(uint64(projectId)),
 		CdcId:     &cdcId,
 	}
+	if cdcId != "" {
+		createCbsReq.Placement.CdcId = &cdcId
+	}
 
 	updateClient(ctrl.cbsClient, ctrl.cvmClient)
 	snapshotId := ""
