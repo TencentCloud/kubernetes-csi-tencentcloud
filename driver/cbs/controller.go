@@ -38,6 +38,7 @@ var (
 	// cbs disk charge type
 	DiskChargeTypePrePaid        = "PREPAID"
 	DiskChargeTypePostPaidByHour = "POSTPAID_BY_HOUR"
+	DiskChargeTypeCdcPaid = "CDCPAID"
 
 	DiskChargeTypeDefault = DiskChargeTypePostPaidByHour
 
@@ -207,6 +208,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			}
 		case "cdcid":
 			cdcId = v
+			volumeChargeType = DiskChargeTypeCdcPaid
 		default:
 		}
 	}
