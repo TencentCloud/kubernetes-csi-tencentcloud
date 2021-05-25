@@ -89,13 +89,14 @@ restore:
 **Note**：[examples](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
 
 * If there are multiple zones of node in your cluster, you can enable topology-aware scheduling of cbs storage volumes with adding `volumeBindingMode: WaitForFirstConsumer` in storageclass, deploy/examples/storageclass-topology.yaml, because cbs volumes can't attach a node with different zone.
-* diskType: cbs volume type, `CLOUD_BASIC`,`CLOUD_PREMIUM`,`CLOUD_SSD`.
+* diskType: cbs volume type, `CLOUD_PREMIUM`,`CLOUD_SSD`,`CLOUD_HSSD`.
 * diskChargeType: `PREPAID`(need extra parameter), `POSTPAID_BY_HOUR`
 * diskChargeTypePrepaidPeriod：`1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36`
 * diskChargePrepaidRenewFlag: If diskType is `PREPAID`, `NOTIFY_AND_AUTO_RENEW`, `NOTIFY_AND_MANUAL_RENEW`, `DISABLE_NOTIFY_AND_MANUAL_RENEW`.
 * encrypt: if need encrypt in cbs, `ENCRYPT` is only one value.
 * disktags: add tags to cbs volume. e.g. `a:b,c:d`
 * throughputperformance: if need extra performance for hssd/tssd. e.g. `100`. https://cloud.tencent.com/document/product/362/51896
+* cdcid: `CdcId`
 
 ## cbs volume size limit, need pvc or pv
 
