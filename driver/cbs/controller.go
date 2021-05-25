@@ -326,7 +326,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	createCbsReq.Placement = &cbs.Placement{
 		Zone:      &volumeZone,
 		ProjectId: common.Uint64Ptr(uint64(projectId)),
-		CdcId:     &cdcId,
 	}
 	if cdcId != "" {
 		createCbsReq.Placement.CdcId = &cdcId
