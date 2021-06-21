@@ -78,7 +78,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			vpcID = v
 		case "subnetid":
 			subnetID = v
-                case "resourcetags":
+		case "resourcetags":
 			tags := strings.Split(v, ",")
 			for _, tag := range tags {
 				kv := strings.Split(tag, ":")

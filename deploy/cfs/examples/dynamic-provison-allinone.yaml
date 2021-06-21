@@ -25,6 +25,7 @@ metadata:
 parameters:
   vpcid: vpc-xxxxxxxx
   subnetid: subnet-xxxxxxxx
+  resourcetags: a:b,c:d
 provisioner: com.tencent.cloud.csi.cfs
 ---
 apiVersion: v1
