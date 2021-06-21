@@ -90,6 +90,7 @@ kubectl create -f deploy/cfs/examples/static-allinone.yaml
 * zone: select your CFS zone, like `ap-guangzhou-3`.
 * pgroupid: select a pgroup which you created in CFS console, default is `pgroupbasic`.
 * storagetype: default is `SD` currently.
+* resourcetags: Optional. `a:b,c:d`
 
 ## PersistentVolume parameters
 
