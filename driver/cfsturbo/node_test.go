@@ -68,6 +68,7 @@ func TestNodeStageVolume(t *testing.T) {
 				StagingTargetPath: "/test/path",
 				VolumeCapability:  stdVolCap,
 				VolumeId:          "test-volume",
+				VolumeContext:     map[string]string{"fsid": "test", "host": "1.1.1.1", "proto": "nfs"},
 			},
 			fakeMounter: &mount.FakeMounter{},
 			expActions: []mount.FakeAction{
@@ -90,6 +91,7 @@ func TestNodeStageVolume(t *testing.T) {
 			name: "success with mount flags",
 			req: &csi.NodeStageVolumeRequest{
 				StagingTargetPath: "/test/path",
+				VolumeContext:     map[string]string{"fsid": "test", "host": "1.1.1.1", "proto": "nfs"},
 				VolumeCapability: &csi.VolumeCapability{
 					AccessType: &csi.VolumeCapability_Mount{
 						Mount: &csi.VolumeCapability_MountVolume{
@@ -124,6 +126,7 @@ func TestNodeStageVolume(t *testing.T) {
 				StagingTargetPath: "/test/path",
 				VolumeCapability:  stdVolCap,
 				VolumeId:          "disk-test",
+				VolumeContext:     map[string]string{"fsid": "test", "host": "1.1.1.1", "proto": "nfs"},
 			},
 			fakeMounter: &mount.FakeMounter{
 				MountPoints: []mount.MountPoint{
@@ -140,6 +143,31 @@ func TestNodeStageVolume(t *testing.T) {
 					Path:   "/test/path",
 				},
 			},
+		},
+		{
+			name: "failed without fsid",
+			req: &csi.NodeStageVolumeRequest{
+				StagingTargetPath: "/test/path",
+				VolumeCapability:  stdVolCap,
+				VolumeId:          "disk-test",
+				VolumeContext:     map[string]string{"host": "1.1.1.1", "proto": "nfs"},
+			},
+			fakeMounter: &mount.FakeMounter{
+				MountPoints: []mount.MountPoint{
+					{
+						Device: fakeDevicePath,
+						Path:   "/test/path",
+					},
+				},
+			},
+			expActions: []mount.FakeAction{},
+			expMountPoints: []mount.MountPoint{
+				{
+					Device: fakeDevicePath,
+					Path:   "/test/path",
+				},
+			},
+			expErrCode: codes.InvalidArgument,
 		},
 	}
 	fakeCFSturboNode := newFakeCFSTurboNode(newFakeSafeFormatAndMounter(newFakeMounter([]mount.MountPoint{})))

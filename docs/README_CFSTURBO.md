@@ -43,8 +43,8 @@ kubectl create -f deploy/cfsturbo/examples/static-allinone.yaml
 
 ### NFS protocol
 
-* proto: Required. Support `nfs` or `lustre`
+* proto: Required. Support `nfs` or `lustre`, you should install kernel module in node before use `lustre` protocol, see https://cloud.tencent.com/document/product/582/54765.
 * host: Required. NFS host like `10.0.0.112`
 * fsid: Required. CFS instance's fsid
 * path: Optional. NFS subpath, default is `/`
-* options: Optional. Mount options for NFS
+* options: Optional. Mount options for CFS Turbo
