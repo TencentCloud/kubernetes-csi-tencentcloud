@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -60,6 +61,8 @@ const (
 	CFSTurboProtoNFS = "nfs"
 	// CFSTurboProtoNFSDefaultDIR ...
 	CFSTurboProtoNFSDefaultDIR = "cfs"
+	// CFSTurboLustreKernelModule ...
+	CFSTurboLustreKernelModule = "ptlrpc"
 )
 
 type nodeServer struct {
@@ -103,6 +106,13 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		opt.Proto = CFSTurboProtoLustre
 	}
 
+	if opt.FSID == "" {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
+	}
+	if opt.Server == "" {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
+	}
+
 	mo := req.GetVolumeCapability().GetMount().GetMountFlags()
 	if opt.Options != "" {
 		mo = append(mo, opt.Options)
@@ -113,12 +123,6 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	switch opt.Proto {
 	case CFSTurboProtoNFS:
 		// check nfs parameters and connection
-		if opt.Server == "" {
-			return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
-		}
-		if opt.FSID == "" {
-			return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
-		}
 		// check network connection
 		conn, err := net.DialTimeout("tcp", opt.Server+":"+nfsPort, time.Second*time.Duration(3))
 		if err != nil {
@@ -132,16 +136,19 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		// cfs turbo mount node use fsid
 		mountSource = fmt.Sprintf("%s:/%s", opt.Server, opt.FSID)
 
-		glog.Infof("CFS server %s mount option is: %v", mountSource, mo)
-
 	case CFSTurboProtoLustre:
-		// TODO support lustre
+		//check cfs lustre core kmod install
+		err := exec.Command("/bin/bash", "-c", fmt.Sprintf("lsmod | grep %s", CFSTurboLustreKernelModule)).Run()
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
+		}
+		mountSource = fmt.Sprintf("%s@tcp0:/%s", opt.Server, opt.FSID)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Unsupport protocol type")
 	}
+	glog.Infof("CFS server %s mount option is: %v", mountSource, mo)
 
-	//check path
-
+	//check mountPath
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -223,30 +230,22 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.Readonly {
 		mo = append(mo, "ro")
 	}
-	var mountSource string
 
 	// check protocol first
 	if opt.Proto == "" {
 		opt.Proto = CFSTurboProtoLustre
 	}
-	switch opt.Proto {
-	case CFSTurboProtoNFS:
-		//check path
-		if opt.Path == "" {
-			opt.Path = "/"
-		}
-		if !strings.HasPrefix(opt.Path, "/") {
-			return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
-		}
-
-		// get global mount sub directory bind mount
-		mountSource = fmt.Sprintf("%s/%s%s", stagingTargetPath, CFSTurboProtoNFSDefaultDIR, opt.Path)
-
-	case CFSTurboProtoLustre:
-		// TODO support lustre
-	default:
-		return nil, status.Error(codes.InvalidArgument, "Unsupport protocol type")
+	//check path
+	if opt.Path == "" {
+		opt.Path = "/"
 	}
+	if !strings.HasPrefix(opt.Path, "/") {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
+	}
+
+	// get global mount sub directory bind mount
+
+	mountSource := fmt.Sprintf("%s/%s%s", stagingTargetPath, CFSTurboProtoNFSDefaultDIR, opt.Path)
 
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
