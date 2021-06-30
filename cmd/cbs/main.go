@@ -22,11 +22,13 @@ const (
 )
 
 var (
-	endpoint          = flag.String("endpoint", fmt.Sprintf("unix:///var/lib/kubelet/plugins/%s/csi.sock", cbs.DriverName), "CSI endpoint")
-	region            = flag.String("region", "", "tencent cloud api region")
-	zone              = flag.String("zone", "", "cvm instance region")
-	cbsUrl            = flag.String("cbs_url", "cbs.internal.tencentcloudapi.com", "cbs api domain")
-	volumeAttachLimit = flag.Int64("volume_attach_limit", -1, "Value for the maximum number of volumes attachable for all nodes. If the flag is not specified then the value is default 20.")
+	endpoint            = flag.String("endpoint", fmt.Sprintf("unix:///var/lib/kubelet/plugins/%s/csi.sock", cbs.DriverName), "CSI endpoint")
+	region              = flag.String("region", "", "tencent cloud api region")
+	zone                = flag.String("zone", "", "cvm instance region")
+	cbsUrl              = flag.String("cbs_url", "cbs.internal.tencentcloudapi.com", "cbs api domain")
+	volumeAttachLimit   = flag.Int64("volume_attach_limit", -1, "Value for the maximum number of volumes attachable for all nodes. If the flag is not specified then the value is default 20.")
+	metricsServerEnable = flag.Bool("enable_metrics_server", true, "enable metrics server, set `false` to close it.")
+	metricsPort         = flag.Int64("metric_port", 9090, "metric port")
 )
 
 func main() {
@@ -66,7 +68,7 @@ func main() {
 		glog.Fatal(err)
 	}
 
-	if err := drv.Run(u, *cbsUrl, cp); err != nil {
+	if err := drv.Run(u, *cbsUrl, cp, *metricsServerEnable, *metricsPort); err != nil {
 		glog.Fatal(err)
 	}
 
