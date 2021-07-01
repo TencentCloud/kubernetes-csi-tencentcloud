@@ -28,7 +28,7 @@ var (
 	cbsUrl              = flag.String("cbs_url", "cbs.internal.tencentcloudapi.com", "cbs api domain")
 	volumeAttachLimit   = flag.Int64("volume_attach_limit", -1, "Value for the maximum number of volumes attachable for all nodes. If the flag is not specified then the value is default 20.")
 	metricsServerEnable = flag.Bool("enable_metrics_server", true, "enable metrics server, set `false` to close it.")
-	metricsPort         = flag.Int64("metric_port", 9090, "metric port")
+	metricsPort         = flag.Int64("metric_port", 9099, "metric port")
 )
 
 func main() {
