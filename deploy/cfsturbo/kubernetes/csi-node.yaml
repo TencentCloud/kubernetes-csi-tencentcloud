@@ -1,0 +1,65 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: cfsturbo-csi-node
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: cfsturbo-csi-node
+  template:
+    metadata:
+      labels:
+        app: cfsturbo-csi-node
+    spec:
+      serviceAccount: cfsturbo-csi-node-sa
+      hostNetwork: true
+      containers:
+        - name: driver-registrar
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-node-driver-registrar:0.3.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /plugin/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /plugin
+        - name: cfsturbo
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: ccr.ccs.tencentyun.com/cbs-stage/csi-tencentcloud-cfsturbo:v0.3.0
+          args :
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://plugin/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /plugin
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cfsturbo
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory

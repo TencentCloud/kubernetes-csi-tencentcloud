@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cfsturbo-csi-controller-sa
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cfsturbo-csi-controller-role
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "endpoints", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "delete", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "nodes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cfsturbo-csi-controller-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: cfsturbo-csi-controller-sa
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: cfsturbo-csi-controller-role
+  apiGroup: rbac.authorization.k8s.io

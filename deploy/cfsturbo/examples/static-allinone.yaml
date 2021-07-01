@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cturbopv
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 10Gi
+  csi:
+    driver: com.tencent.cloud.csi.cfsturbo
+    volumeHandle: data-cfsplugin-static
+    volumeAttributes: 
+      host: 172.16.0.2 
+      fsid: 8edac158
+      proto: lustre
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cturbopvc
+spec:
+  storageClassName: ""
+  volumeName: cturbopv
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx 
+spec:
+  nodeName: 10.0.6.21
+  containers:
+  - image: ccr.ccs.tencentyun.com/qcloud/nginx:1.9
+    imagePullPolicy: Always
+    name: nginx
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    volumeMounts:
+      - mountPath: /var/www
+        name: data-cfsplugin-static
+  volumes:
+  - name: data-cfsplugin-static
+    persistentVolumeClaim:
+      claimName: cturbopvc

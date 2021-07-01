@@ -1,0 +1,58 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: cfsturbo-csi-attacher
+  namespace: kube-system
+spec:
+  selector:
+    app: cfsturbo-csi-attacher
+  ports:
+    - name: dummy
+      port: 12345
+---
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: cfsturbo-csi-attacher
+  namespace: kube-system
+spec:
+  serviceName: cfsturbo-csi-attacher
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cfsturbo-csi-attacher
+    spec:
+      serviceAccount: cfsturbo-csi-controller-sa
+      containers:
+        - name: attacher
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-attacher:0.3.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: cfsturbo
+          image: ccr.ccs.tencentyun.com/cbs-stage/csi-tencentcloud-cfsturbo:v0.3.0
+          args :
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://plugin/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /plugin
+      volumes:
+        - name: socket-dir
+          emptyDir:
