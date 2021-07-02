@@ -37,13 +37,7 @@ func main() {
 
 	mount := r.Path("/mount").Subrouter()
 	mount.Methods("POST").HandlerFunc(mountHandler)
-
-	go func() {
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			glog.Error(err)
-		}
-	}()
-
+	
 	server := http.Server{
 		Handler: r,
 	}
