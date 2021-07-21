@@ -99,6 +99,7 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 * disktags: 可以给云盘加tag。形式如 `a:b,c:d`
 * throughputperformance: 对hssd/tssd盘，如果需要达到最大性能，可以填入额外性能。具体取值参见https://cloud.tencent.com/document/product/362/51896
 * cdcid: 独占集群ID
+* cageid: 围笼ID
 
 ## 不同类型云盘的大小限制
 

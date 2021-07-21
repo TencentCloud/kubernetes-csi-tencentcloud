@@ -156,7 +156,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	var aspId, volumeZone, cdcId string
+	var aspId, volumeZone, cdcId, cageId string
 	inputVolumeType := DiskTypeDefault
 	volumeChargeType := DiskChargeTypeDefault
 	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
@@ -208,6 +208,10 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			}
 		case "cdcid":
 			cdcId = v
+			volumeChargeType = DiskChargeTypeCdcPaid
+		case "cageid":
+			cageId = v
+			// Nocharge for cbs in cage mode, so we use the cdc paid here.
 			volumeChargeType = DiskChargeTypeCdcPaid
 		default:
 		}
@@ -329,6 +333,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 	if cdcId != "" {
 		createCbsReq.Placement.CdcId = &cdcId
+	}
+	if cageId != "" {
+		createCbsReq.Placement.CageId = &cageId
 	}
 
 	updateClient(ctrl.cbsClient, ctrl.cvmClient)

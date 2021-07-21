@@ -97,6 +97,7 @@ restore:
 * disktags: add tags to cbs volume. e.g. `a:b,c:d`
 * throughputperformance: if need extra performance for hssd/tssd. e.g. `100`. https://cloud.tencent.com/document/product/362/51896
 * cdcid: `CdcId`
+* cageid: `CageId`
 
 ## cbs volume size limit, need pvc or pv
 
