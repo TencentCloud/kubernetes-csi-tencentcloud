@@ -15,8 +15,7 @@ spec:
       host: 10.0.0.116
       # cfs turbo fsid(not cfs id)
       fsid: xxxxxxxx
-      # support nfs currently
-      proto: nfs
+      proto: lustre
   storageClassName: ""
 ---
 apiVersion: v1
