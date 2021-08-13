@@ -89,7 +89,7 @@ func NewAttachDisksResponse() (response *AttachDisksResponse) {
 
 // 本接口（AttachDisks）用于挂载云硬盘。
 //  
-// * 支持批量操作，将多块云盘挂载到同一云主机。如果多个云盘存在不允许挂载的云盘，则操作不执行，以返回特定的错误码返回。
+// * 支持批量操作，将多块云盘挂载到同一云主机。如果多个云盘中存在不允许挂载的云盘，则操作不执行，返回特定的错误码。
 // * 本接口为异步接口，当挂载云盘的请求成功返回时，表示后台已发起挂载云盘的操作，可通过接口[DescribeDisks](/document/product/362/16315)来查询对应云盘的状态，如果云盘的状态由“ATTACHING”变为“ATTACHED”，则为挂载成功。
 func (c *Client) AttachDisks(request *AttachDisksRequest) (response *AttachDisksResponse, err error) {
     if request == nil {
@@ -523,10 +523,10 @@ func NewDetachDisksResponse() (response *DetachDisksResponse) {
     return
 }
 
-// 本接口（DetachDisks）用于解挂云硬盘。
+// 本接口（DetachDisks）用于卸载云硬盘。
 // 
-// * 支持批量操作，解挂挂载在同一主机上的多块云盘。如果多块云盘存在不允许解挂载的云盘，则操作不执行，以返回特定的错误码返回。
-// * 本接口为异步接口，当请求成功返回时，云盘并未立即从主机解挂载，可通过接口[DescribeDisks](/document/product/362/16315)来查询对应云盘的状态，如果云盘的状态由“ATTACHED”变为“UNATTACHED”，则为解挂载成功。
+// * 支持批量操作，卸载挂载在同一主机上的多块云盘。如果多块云盘中存在不允许卸载的云盘，则操作不执行，返回特定的错误码。
+// * 本接口为异步接口，当请求成功返回时，云盘并未立即从主机卸载，可通过接口[DescribeDisks](/document/product/362/16315)来查询对应云盘的状态，如果云盘的状态由“ATTACHED”变为“UNATTACHED”，则为卸载成功。
 func (c *Client) DetachDisks(request *DetachDisksRequest) (response *DetachDisksResponse, err error) {
     if request == nil {
         request = NewDetachDisksRequest()
@@ -557,6 +557,31 @@ func (c *Client) GetSnapOverview(request *GetSnapOverviewRequest) (response *Get
         request = NewGetSnapOverviewRequest()
     }
     response = NewGetSnapOverviewResponse()
+    err = c.Send(request, response)
+    return
+}
+
+func NewInquirePriceModifyDiskExtraPerformanceRequest() (request *InquirePriceModifyDiskExtraPerformanceRequest) {
+    request = &InquirePriceModifyDiskExtraPerformanceRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "InquirePriceModifyDiskExtraPerformance")
+    return
+}
+
+func NewInquirePriceModifyDiskExtraPerformanceResponse() (response *InquirePriceModifyDiskExtraPerformanceResponse) {
+    response = &InquirePriceModifyDiskExtraPerformanceResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 本接口（InquirePriceModifyDiskExtraPerformance）用于调整云硬盘额外性能询价。
+func (c *Client) InquirePriceModifyDiskExtraPerformance(request *InquirePriceModifyDiskExtraPerformanceRequest) (response *InquirePriceModifyDiskExtraPerformanceResponse, err error) {
+    if request == nil {
+        request = NewInquirePriceModifyDiskExtraPerformanceRequest()
+    }
+    response = NewInquirePriceModifyDiskExtraPerformanceResponse()
     err = c.Send(request, response)
     return
 }
@@ -695,6 +720,33 @@ func (c *Client) ModifyDiskAttributes(request *ModifyDiskAttributesRequest) (res
         request = NewModifyDiskAttributesRequest()
     }
     response = NewModifyDiskAttributesResponse()
+    err = c.Send(request, response)
+    return
+}
+
+func NewModifyDiskExtraPerformanceRequest() (request *ModifyDiskExtraPerformanceRequest) {
+    request = &ModifyDiskExtraPerformanceRequest{
+        BaseRequest: &tchttp.BaseRequest{},
+    }
+    request.Init().WithApiInfo("cbs", APIVersion, "ModifyDiskExtraPerformance")
+    return
+}
+
+func NewModifyDiskExtraPerformanceResponse() (response *ModifyDiskExtraPerformanceResponse) {
+    response = &ModifyDiskExtraPerformanceResponse{
+        BaseResponse: &tchttp.BaseResponse{},
+    }
+    return
+}
+
+// 本接口（ModifyDiskExtraPerformance）用于调整云硬盘额外的性能。
+// 
+// * 目前仅支持极速型SSD云硬盘（CLOUD_TSSD）和高性能SSD云硬盘(CLOUD_HSSD)。
+func (c *Client) ModifyDiskExtraPerformance(request *ModifyDiskExtraPerformanceRequest) (response *ModifyDiskExtraPerformanceResponse, err error) {
+    if request == nil {
+        request = NewModifyDiskExtraPerformanceRequest()
+    }
+    response = NewModifyDiskExtraPerformanceResponse()
     err = c.Send(request, response)
     return
 }
@@ -859,8 +911,8 @@ func NewResizeDiskResponse() (response *ResizeDiskResponse) {
 
 // 本接口（ResizeDisk）用于扩容云硬盘。
 // 
-// * 只支持扩容弹性云盘。云硬盘类型可以通过[DescribeDisks](/document/product/362/16315)接口查询，见输出参数中Portable字段解释。随云主机创建的云硬盘需通过[ResizeInstanceDisks](/document/product/213/15731)接口扩容。
-// * 本接口为异步接口，接口成功返回时，云盘并未立即扩容到指定大小，可通过接口[DescribeDisks](/document/product/362/16315)来查询对应云盘的状态，如果云盘的状态为“EXPANDING”，表示正在扩容中，当状态变为“UNATTACHED”，表示扩容完成。 
+// * 只支持扩容弹性云盘。云硬盘类型可以通过[DescribeDisks](/document/product/362/16315)接口查询，见输出参数中Portable字段解释。非弹性云硬盘需通过[ResizeInstanceDisks](/document/product/213/15731)接口扩容。
+// * 本接口为异步接口，接口成功返回时，云盘并未立即扩容到指定大小，可通过接口[DescribeDisks](/document/product/362/16315)来查询对应云盘的状态，如果云盘的状态为“EXPANDING”，表示正在扩容中。 
 func (c *Client) ResizeDisk(request *ResizeDiskRequest) (response *ResizeDiskResponse, err error) {
     if request == nil {
         request = NewResizeDiskRequest()
