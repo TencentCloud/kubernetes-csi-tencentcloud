@@ -120,7 +120,8 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 		return nil, err
 	}
 	cvmcpf := profile.NewClientProfile()
-	cvmcpf.HttpProfile.Endpoint = "cvm.tencentcloudapi.com"
+	//cvmcpf.HttpProfile.Endpoint = "cvm.tencentcloudapi.com"
+        cvmcpf.HttpProfile.Endpoint = "cvm.internal.tencentcloudapi.com"
 	cvmClient, err := cvm.NewClient(cred, region, cvmcpf)
 	if err != nil {
 		return nil, err
