@@ -43,17 +43,25 @@ kubectl apply -f  deploy/cfs/kubernetes/csi-cfs-rbac.yaml
 
 ### controller,node plugin
 
-**If your k8s version >= 1.14**
+**If your k8s version >= 1.18**
 ```yaml
 kubectl apply -f  deploy/cfs/kubernetes/csi-cfs-csidriver.yaml
-kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin.yaml
-kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin-new.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin-new.yaml
 ```
+
+**If your k8s version >= 1.14 && < 1.18**
+```yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-cfs-csidriver.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin-mid.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin-mid.yaml
+```
+
 **If your k8s version < 1.14**
 ```yaml
 kubectl apply -f  deploy/cfs/kubernetes/csi-attacher-cfsplugin.yaml
-kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin.yaml
-kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-nodeplugin-cfsplugin-old.yaml
+kubectl apply -f  deploy/cfs/kubernetes/csi-provisioner-cfsplugin-old.yaml
 ```
 
 ### examples

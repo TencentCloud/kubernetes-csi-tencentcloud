@@ -2,10 +2,10 @@
 kind: Deployment
 apiVersion: apps/v1
 metadata:
-  name: cbs-csi-controller
+  name: csi-cbs-controller
   namespace: kube-system
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: cbs-csi-controller
@@ -15,15 +15,21 @@ spec:
         app: cbs-csi-controller
     spec:
       serviceAccountName: cbs-csi-controller-sa
-      priorityClassName: system-cluster-critical
+      priorityClassName: system-node-critical
+      hostAliases:
+        - ip: "169.254.0.23"
+          hostnames:
+            - "metadata.tencentyun.com"
       containers:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.6.0
+          imagePullPolicy: "Always"
           args:
             - "--feature-gates=Topology=true"
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
             - "--timeout=120s"
+            - "--metrics-address=:9090"
             - "--enable-leader-election"
             - "--leader-election-type=leases"
           env:
@@ -38,13 +44,15 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
         - name: csi-attacher
           image: quay.io/k8scsi/csi-attacher:v2.2.0
+          imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
             - "--leader-election=true"
+            - "--metrics-address=:9091"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -57,9 +65,10 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
         - name: csi-snapshotter
           image: quay.io/k8scsi/csi-snapshotter:v2.1.0
+          imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
             - "--leader-election=true"
@@ -76,9 +85,10 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
         - name: snapshot-controller
           image: quay.io/k8scsi/snapshot-controller:v2.1.0
+          imagePullPolicy: "Always"
           args:
             - "--v=5"
             - "--leader-election=true"
@@ -88,9 +98,10 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
         - name: csi-resizer
           image: quay.io/k8scsi/csi-resizer:v0.5.0
+          imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -107,15 +118,16 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
         - name: cbs-csi
           image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v1.2.0
+          imagePullPolicy: "Always"
           command:
-          - "/csi-tencentcloud-cbs"
+            - "/csi-tencentcloud-cbs"
           args:
-          - "--v=5"
-          - "--logtostderr=true"
-          - "--endpoint=$(ADDRESS)"
+            - "--v=5"
+            - "--logtostderr=true"
+            - "--endpoint=$(ADDRESS)"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -135,9 +147,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-# for deleting cbs disks in cluster while deleting cluster
-#            - name: CLUSTER_ID
-#              value: cls-xxxxxx
+          # for deleting cbs disks in cluster while deleting cluster
+          # - name: CLUSTER_ID
+          #   value: cls-xxxxxx
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -147,7 +159,7 @@ spec:
               memory: 1Gi
             requests:
               cpu: 100m
-              memory: 100Mi
+              memory: 50Mi
       volumes:
         - name: socket-dir
           emptyDir: {}

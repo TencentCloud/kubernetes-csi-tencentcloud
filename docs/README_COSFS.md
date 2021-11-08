@@ -54,15 +54,33 @@ kubectl create -f deploy/cosfs/kubernetes/cosattacher.yaml
 Deploys stateful sets for external-attacher sidecar containers for COS CSI driver.
 
 **Deploy COS CSI launcher components:**
-
+* If your k8s version >= 1.18
 ```bash
-kubectl create -f deploy/cosfs/kubernetes/coslauncher.yaml
+kubectl create -f deploy/cosfs/kubernetes/coslauncher-new.yaml
+```
+
+* If your k8s version < 1.18
+```bash
+kubectl create -f deploy/cosfs/kubernetes/coslauncher-old.yaml
 ```
 
 **Deploy COS CSI driver and related RBACs:**
-
+* If your k8s version >= 1.18
 ```bash
-kubectl create -f deploy/cosfs/kubernetes/cosplugin.yaml
+kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl create -f deploy/cosfs/kubernetes/cosplugin-new.yaml
+```
+
+* If your k8s version >= 1.14 && < 1.18
+```bash
+kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl create -f deploy/cosfs/kubernetes/cosplugin-mid.yaml
+```
+
+* If your k8s version < 1.14
+```bash
+kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl create -f deploy/cosfs/kubernetes/cosplugin-old.yaml
 ```
 
 Deploys a daemon set with two containers: CSI driver-registrar and the COS CSI driver.
@@ -72,7 +90,7 @@ Deploys a daemon set with two containers: CSI driver-registrar and the COS CSI d
 After successfully completing the steps above, you should see output similar to this:
 
 ```bash
-$ kubectl get po
+$ kubectl get po -n kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 csi-cosplugin-external-runner-0   2/2       Running   0          1h
 csi-cosplugin-z9vrj               2/2       Running   0          1h

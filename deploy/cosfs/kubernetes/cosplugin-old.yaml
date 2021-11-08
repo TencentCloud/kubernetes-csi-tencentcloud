@@ -1,0 +1,67 @@
+# This YAML file contains driver-registrar & csi driver nodeplugin API objects,
+# which are necessary to run csi nodeplugin for oss.
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-cosplugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-cosplugin
+  template:
+    metadata:
+      labels:
+        app: csi-cosplugin
+    spec:
+      serviceAccount: csi-cos-tencentcloud
+      priorityClassName: system-node-critical
+      hostNetwork: true
+      containers:
+        - name: driver-registrar
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:0.3.0
+          imagePullPolicy: "Always"
+          args:
+            - "--v=3"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+        - name: cosfs
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:0.3.0
+          args:
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            - name: launcher-socket-dir
+              mountPath: /tmp
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            type: DirectoryOrCreate
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            type: DirectoryOrCreate
+        - name: launcher-socket-dir
+          hostPath:
+            path: /etc/csi-cos
+            type: DirectoryOrCreate

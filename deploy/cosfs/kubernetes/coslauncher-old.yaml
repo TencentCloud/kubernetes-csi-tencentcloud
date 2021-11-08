@@ -13,6 +13,7 @@ spec:
         app: csi-coslauncher
     spec:
       hostNetwork: true
+      priorityClassName: system-node-critical
       containers:
         - name: cos-launcher
           securityContext:
@@ -20,8 +21,15 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cos-launcher:1.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:1.0.0
           imagePullPolicy: "Always"
+          resources:
+            limits:
+              cpu: "8"
+              memory: 8Gi
+            requests:
+              cpu: 250m
+              memory: 250Mi
           volumeMounts:
           - name: launcher-socket-dir
             mountPath: /tmp
