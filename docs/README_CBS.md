@@ -60,10 +60,19 @@ kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
 
 ### controller,node plugin
+Kubernetes version >= v1.18.x
 
-```yaml
-kubectl apply -f  deploy/cbs/kubernetes/csi-controller.yaml
-kubectl apply -f  deploy/cbs/kubernetes/csi-node.yaml
+```
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller-new.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node-new.yaml
+kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
+```
+
+Kubernetes version < v1.18.x
+
+```
+kubectl apply -f  deploy/cbs/kubernetes/csi-controller-old.yaml
+kubectl apply -f  deploy/cbs/kubernetes/csi-node-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
