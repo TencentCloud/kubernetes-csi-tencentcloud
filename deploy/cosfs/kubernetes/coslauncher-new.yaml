@@ -1,0 +1,52 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-coslauncher
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-coslauncher
+  template:
+    metadata:
+      labels:
+        app: csi-coslauncher
+    spec:
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      containers:
+        - name: cos-launcher
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:v2.0.0
+          imagePullPolicy: "Always"
+          resources:
+            limits:
+              cpu: "8"
+              memory: 8Gi
+            requests:
+              cpu: 250m
+              memory: 250Mi
+          volumeMounts:
+            - name: launcher-socket-dir
+              mountPath: /tmp
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+            - mountPath: /dev/fuse
+              name: host-fuse
+      volumes:
+        - name: launcher-socket-dir
+          hostPath:
+            path: /etc/csi-cos
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: host-fuse
+          hostPath:
+            path: /dev/fuse

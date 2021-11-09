@@ -1,8 +1,9 @@
-
+---
 kind: Service
 apiVersion: v1
 metadata:
   name: csi-provisioner-cfsplugin
+  namespace: kube-system
   labels:
     app: csi-provisioner-cfsplugin
 spec:
@@ -17,32 +18,35 @@ kind: StatefulSet
 apiVersion: apps/v1
 metadata:
   name: csi-provisioner-cfsplugin
+  namespace: kube-system
 spec:
   serviceName: csi-provisioner-cfsplugin
   replicas: 1
+  selector:
+    matchLabels:
+      app: csi-provisioner-cfsplugin
   template:
     metadata:
       labels:
         app: csi-provisioner-cfsplugin
     spec:
       serviceAccount: csi-cfs-tencentcloud
+      priorityClassName: system-node-critical
       containers:
         - name: csi-provisioner
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-provisioner:1.0.1
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-provisioner:v2.0.4
           args:
-            - "--provisioner=com.tencent.cloud.csi.cfs"
             - "--csi-address=$(ADDRESS)"
             - "--v=3"
-            - "--connection-timeout=120s"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: "IfNotPresent"
+          imagePullPolicy: "Always"
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:1.0.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:v2.0.0
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
@@ -65,7 +69,7 @@ spec:
                   name: cfs-csi-api-key
                   key: TENCENTCLOUD_CFS_API_SECRET_KEY
                   optional: true
-          imagePullPolicy: "IfNotPresent"
+          imagePullPolicy: "Always"
           volumeMounts:
             - name: socket-dir
               mountPath: /plugin

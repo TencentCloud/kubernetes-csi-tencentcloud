@@ -1,6 +1,5 @@
 # This YAML file contains driver-registrar & csi driver nodeplugin API objects,
 # which are necessary to run csi nodeplugin for oss.
-
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -16,28 +15,30 @@ spec:
         app: csi-cosplugin
     spec:
       serviceAccount: csi-cos-tencentcloud
+      priorityClassName: system-node-critical
       hostNetwork: true
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:1.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:1.0.2
+          imagePullPolicy: "Always"
           lifecycle:
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "rm -rf /registration/com.tencent.cloud.csi.cosfs /registration/com.tencent.cloud.csi.cosfs-reg.sock"]
           args:
-            - "--v=5"
+            - "--v=3"
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=/var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock"
           env:
             - name: ADDRESS
-              value: /plugin/csi.sock
+              value: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
-            - name: plugin-dir
-              mountPath: /plugin
+            - name: socket-dir
+              mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
             - name: registration-dir
               mountPath: /registration
         - name: cosfs
@@ -46,7 +47,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cos:1.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:1.0.0
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
@@ -56,15 +57,19 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: CSI_ENDPOINT
-              value: unix://plugin/csi.sock
-          imagePullPolicy: "IfNotPresent"
+              value: unix://var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+          imagePullPolicy: "Always"
           volumeMounts:
             - name: plugin-dir
-              mountPath: /plugin
+              mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
             - name: launcher-socket-dir
               mountPath: /tmp
       volumes:
         - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            type: DirectoryOrCreate
+        - name: socket-dir
           hostPath:
             path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
             type: DirectoryOrCreate
