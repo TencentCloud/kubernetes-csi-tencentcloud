@@ -2,7 +2,7 @@
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
-  name: cbs-csi-node
+  name: csi-cbs-node
   namespace: kube-system
 spec:
   selector:
@@ -17,9 +17,15 @@ spec:
       hostNetwork: true
       hostPID: true
       dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      hostAliases:
+        - ip: "169.254.0.23"
+          hostnames:
+            - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:v2.0.1
+          imagePullPolicy: "Always"
           args:
             - "--v=5"
             - "--csi-address=/csi/csi.sock"
@@ -48,13 +54,13 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v1.2.0
+          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v2.0.0
           command:
-          - "/csi-tencentcloud-cbs"
+            - "/csi-tencentcloud-cbs"
           args:
-          - "--v=5"
-          - "--logtostderr=true"
-          - "--endpoint=unix:///csi/csi.sock"
+            - "--v=5"
+            - "--logtostderr=true"
+            - "--endpoint=unix:///csi/csi.sock"
           env:
             - name: TENCENTCLOUD_API_SECRET_ID
               valueFrom:

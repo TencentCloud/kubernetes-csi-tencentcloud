@@ -1,3 +1,4 @@
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -21,27 +22,31 @@ metadata:
 spec:
   serviceName: "csi-cosplugin-external-runner"
   replicas: 1
+  selector:
+    matchLabels:
+      app: csi-cosplugin-external-runner
   template:
     metadata:
       labels:
         app: csi-cosplugin-external-runner
     spec:
       serviceAccount: csi-cos-tencentcloud
+      priorityClassName: system-node-critical
       containers:
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-attacher:1.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-attacher:0.3.0
           args:
             - "--v=3"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: "IfNotPresent"
+          imagePullPolicy: "Always"
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cosfs
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cos:1.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:0.3.0
           env:
             - name: NODE_ID
               valueFrom:
