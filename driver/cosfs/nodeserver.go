@@ -41,7 +41,7 @@ const (
 	// Used to create staging mount point password files.
 	perm = 0600
 
-	defaultDBGLevel          = "info"
+	defaultDBGLevel          = "err"
 	cosPasswordFile          = "/etc/passwd-cosfs"
 	cosPasswordFileDirectory = "/tmp/"
 	secretKey                = "sec"
