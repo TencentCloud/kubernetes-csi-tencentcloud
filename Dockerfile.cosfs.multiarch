@@ -1,10 +1,10 @@
-FROM docker.mirrors.ustc.edu.cn/library/golang:1.12 as builder
+FROM golang:1.12 as builder
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -ldflags '-extldflags "-static"' -v -o csi-cos_${TARGETARCH} cmd/cosfs/main.go
 
-FROM docker.mirrors.ustc.edu.cn/library/alpine:3.7
+FROM alpine:3.14.2
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud COS CSI Plugin"
 # Copy cosplugin from build _output directory
