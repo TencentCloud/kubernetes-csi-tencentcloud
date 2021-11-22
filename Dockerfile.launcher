@@ -1,4 +1,4 @@
-FROM golang:1.15.5-stretch as builder
+FROM golang:1.15.5 as builder
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o launcher build/cosfs/launcher.go
