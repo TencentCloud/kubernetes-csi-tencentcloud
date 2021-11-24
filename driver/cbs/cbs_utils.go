@@ -6,8 +6,9 @@ import (
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
+	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
 )
 
 type cbsSnapshot struct {
@@ -49,7 +50,7 @@ func getCbsSnapshotByName(snapName string) (*cbsSnapshot, error) {
 	return nil, fmt.Errorf("snapshot name %s does not exit in the snapshots list", snapName)
 }
 
-func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client)  {
+func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client, tagclient *tag.Client) {
 	secretID, secretKey, token, isTokenUpdate := util.GetSercet()
 	if token != "" && isTokenUpdate {
 		cred := common.Credential{
@@ -59,5 +60,6 @@ func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client)  {
 		}
 		cbsClient.WithCredential(&cred)
 		cvmClient.WithCredential(&cred)
+		tagclient.WithCredential(&cred)
 	}
 }
