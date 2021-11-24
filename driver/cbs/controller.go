@@ -19,6 +19,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
+	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
 
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
@@ -38,7 +39,7 @@ var (
 	// cbs disk charge type
 	DiskChargeTypePrePaid        = "PREPAID"
 	DiskChargeTypePostPaidByHour = "POSTPAID_BY_HOUR"
-	DiskChargeTypeCdcPaid = "CDCPAID"
+	DiskChargeTypeCdcPaid        = "CDCPAID"
 
 	DiskChargeTypeDefault = DiskChargeTypePostPaidByHour
 
@@ -63,6 +64,9 @@ var (
 
 	//cbs disk zones
 	DiskZones = "diskZones"
+
+	TKESERVICETYPE    = "ccs"
+	TKERESOURCEPREFIX = "cluster"
 
 	TagForDeletionCreateBy  = "tke-cbs-provisioner-createBy-flag"
 	TagForDeletionClusterId = "tke-clusterId"
@@ -100,7 +104,9 @@ var (
 type cbsController struct {
 	cbsClient     *cbs.Client
 	cvmClient     *cvm.Client
+	tagClient     *tag.Client
 	zone          string
+	region        string
 	clusterId     string
 	metadataStore util.CachePersister
 }
@@ -121,8 +127,16 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 	}
 	cvmcpf := profile.NewClientProfile()
 	//cvmcpf.HttpProfile.Endpoint = "cvm.tencentcloudapi.com"
-        cvmcpf.HttpProfile.Endpoint = "cvm.internal.tencentcloudapi.com"
+	cvmcpf.HttpProfile.Endpoint = "cvm.internal.tencentcloudapi.com"
 	cvmClient, err := cvm.NewClient(cred, region, cvmcpf)
+	if err != nil {
+		return nil, err
+	}
+
+	tagCpf := profile.NewClientProfile()
+	tagCpf.Language = "en-US"
+	tagCpf.HttpProfile.Endpoint = "tag.internal.tencentcloudapi.com"
+	tagClient, err := tag.NewClient(cred, region, tagCpf)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +144,9 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 	return &cbsController{
 		cbsClient:     client,
 		cvmClient:     cvmClient,
+		tagClient:     tagClient,
 		zone:          zone,
+		region:        region,
 		clusterId:     clusterId,
 		metadataStore: cachePersister,
 	}, nil
@@ -229,7 +245,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		volumeZone = ctrl.zone
 	}
 
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	// If zone param not prefix with ap-,
 	glog.Infof("tencent zone: %v", volumeZone)
 	if !strings.HasPrefix(volumeZone, "ap-") {
@@ -332,7 +348,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		createCbsReq.Placement.CdcId = &cdcId
 	}
 
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	snapshotId := ""
 	if req.VolumeContentSource != nil {
 		sTimeForDescribeSnapshots := time.Now()
@@ -373,6 +389,23 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 					SnapshotId: snapshotId,
 				},
 			},
+		}
+	}
+
+	tagRequest := tag.NewDescribeResourceTagsByResourceIdsRequest()
+	tagRequest.ServiceType = common.StringPtr(TKESERVICETYPE)
+	tagRequest.ResourcePrefix = common.StringPtr(TKERESOURCEPREFIX)
+	tagRequest.ResourceIds = common.StringPtrs([]string{ctrl.clusterId})
+	tagRequest.ResourceRegion = common.StringPtr(ctrl.region)
+	tagRequest.Limit = common.Uint64Ptr(100)
+
+	tagResp, err := ctrl.tagClient.DescribeResourceTagsByResourceIds(tagRequest)
+	if err != nil {
+		glog.Warningf("DescribeResourceTagsByResourceIds error %v", err)
+	} else if tagResp.Response != nil && len(tagResp.Response.Tags) > 0 {
+		glog.Infof("cluster %v's tags count is %v", ctrl.clusterId, *tagResp.Response.TotalCount)
+		for _, tag := range tagResp.Response.Tags {
+			createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: tag.TagKey, Value: tag.TagValue})
 		}
 	}
 
@@ -477,7 +510,7 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	sTime := time.Now()
 	describeDiskRequest := cbs.NewDescribeDisksRequest()
 	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
@@ -524,7 +557,7 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
@@ -612,7 +645,7 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	sTime := time.Now()
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
@@ -729,7 +762,7 @@ func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.
 	// check size
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -799,7 +832,7 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}
 	sourceVolumeId := req.GetSourceVolumeId()
 	snapshotName := req.GetName()
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 
 	if cbsSnap, err := getCbsSnapshotByName(snapshotName); err == nil {
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
@@ -917,7 +950,7 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 
 	terminateSnapRequest := cbs.NewDeleteSnapshotsRequest()
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
 
 	if err != nil {
@@ -988,7 +1021,7 @@ func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode 
 	diskQuotaRequest.InquiryType = common.StringPtr("INQUIRY_CBS_CONFIG")
 	diskQuotaRequest.Zones = common.StringPtrs([]string{zone})
 	diskQuotaRequest.DiskChargeType = common.StringPtr(paymode)
-	updateClient(ctrl.cbsClient, ctrl.cvmClient)
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	diskQuotaResp, err := ctrl.cbsClient.DescribeDiskConfigQuota(diskQuotaRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota), "", util.GetTencentSdkErrCode(err)).Inc()
