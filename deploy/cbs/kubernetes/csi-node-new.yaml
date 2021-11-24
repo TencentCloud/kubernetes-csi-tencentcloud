@@ -13,6 +13,16 @@ spec:
       labels:
         app: cbs-csi-node
     spec:
+      spec:
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/instance-type
+                  operator: NotIn
+                  values:
+                  - CHC
       serviceAccount: cbs-csi-node-sa
       hostNetwork: true
       hostPID: true
