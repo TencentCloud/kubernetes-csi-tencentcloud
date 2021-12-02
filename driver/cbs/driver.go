@@ -6,10 +6,13 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/tags"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -30,20 +33,23 @@ type Driver struct {
 	// TKE cluster ID
 	clusterId         string
 	volumeAttachLimit int64
+	// kube client
+	client kubernetes.Interface
 }
 
-func NewDriver(region, zone, clusterId string, volumeAttachLimit int64) (*Driver, error) {
+func NewDriver(region, zone, clusterId string, volumeAttachLimit int64, client kubernetes.Interface) (*Driver, error) {
 	driver := Driver{
 		zone:              zone,
 		region:            region,
 		clusterId:         clusterId,
 		volumeAttachLimit: volumeAttachLimit,
+		client:            client,
 	}
 
 	return &driver, nil
 }
 
-func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.CachePersister, enableMetricsServer bool, metricPort int64) error {
+func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.CachePersister, enableMetricsServer bool, timeInterval int, metricPort int64) error {
 	controller, err := newCbsController(drv.region, drv.zone, cbsUrl, drv.clusterId, cachePersister)
 	if err != nil {
 		return err
@@ -115,6 +121,17 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 	if err != nil {
 		return err
 	}
+
+	// Sync the tags of cluster and disks
+	go func() {
+		for {
+			rand.Seed(time.Now().UnixNano())
+			n := rand.Intn(timeInterval)
+			glog.Infof("Begin to sync the tags of cluster and disks after sleeping %d minutes...\n", n)
+			time.Sleep(time.Duration(n) * time.Minute)
+			tags.UpdateDisksTags(drv.client, controller.cbsClient, controller.cvmClient, controller.tagClient, drv.region, drv.clusterId)
+		}
+	}()
 
 	return srv.Serve(listener)
 }

@@ -1,5 +1,7 @@
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
+# github.com/bitly/go-simplejson v0.5.0
+github.com/bitly/go-simplejson
 # github.com/container-storage-interface/spec v1.2.0
 github.com/container-storage-interface/spec/lib/go/csi
 # github.com/davecgh/go-spew v1.1.1

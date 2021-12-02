@@ -3,9 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"net/http"
 	"net/url"
 	"os"
+
+	"k8s.io/client-go/rest"
 
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
@@ -29,11 +32,22 @@ var (
 	volumeAttachLimit   = flag.Int64("volume_attach_limit", -1, "Value for the maximum number of volumes attachable for all nodes. If the flag is not specified then the value is default 20.")
 	metricsServerEnable = flag.Bool("enable_metrics_server", true, "enable metrics server, set `false` to close it.")
 	metricsPort         = flag.Int64("metric_port", 9099, "metric port")
+	timeInterval        = flag.Int("time-interval", 60, "the time interval for synchronizing cluster and disks tags, just for test")
 )
 
 func main() {
 	flag.Parse()
 	defer glog.Flush()
+
+	glog.Infof("Building kube client")
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		glog.Fatalf("Failed to create config: %v", err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		glog.Fatalf("Failed to create client: %v", err)
+	}
 
 	metadataClient := metadata.NewMetaData(http.DefaultClient)
 
@@ -63,12 +77,12 @@ func main() {
 
 	cp := util.NewCachePersister()
 
-	drv, err := cbs.NewDriver(*region, *zone, os.Getenv(ClusterId), *volumeAttachLimit)
+	drv, err := cbs.NewDriver(*region, *zone, os.Getenv(ClusterId), *volumeAttachLimit, clientset)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
-	if err := drv.Run(u, *cbsUrl, cp, *metricsServerEnable, *metricsPort); err != nil {
+	if err := drv.Run(u, *cbsUrl, cp, *metricsServerEnable, *timeInterval, *metricsPort); err != nil {
 		glog.Fatal(err)
 	}
 
