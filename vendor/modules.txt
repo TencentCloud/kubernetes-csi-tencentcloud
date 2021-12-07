@@ -1,5 +1,7 @@
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
+# github.com/bitly/go-simplejson v0.5.0
+github.com/bitly/go-simplejson
 # github.com/container-storage-interface/spec v1.2.0
 github.com/container-storage-interface/spec/lib/go/csi
 # github.com/davecgh/go-spew v1.1.1
@@ -84,6 +86,7 @@ github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813
 # golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
 golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
