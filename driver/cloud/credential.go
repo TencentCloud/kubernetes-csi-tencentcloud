@@ -14,7 +14,13 @@ import (
 	"github.com/golang/glog"
 )
 
-const NormExpiredDuration = time.Second * 7200
+const (
+	NormExpiredDuration = time.Second * 7200
+	envClusterID = "CLUSTER_ID"
+	envAPPID = "APPID"
+	normClusterID = "unClusterId"
+	normAPPID = "appId"
+)
 
 var (
 	refresher NormRefresher
@@ -59,7 +65,14 @@ func GetTkeCredential() (*CredentialData, error) {
 
 	normURL := getNormUrl()
 	client := &http.Client{}
-
+	pa := make(map[string]interface{})
+	clusterID := os.Getenv(envClusterID)
+	appID := os.Getenv(envAPPID)
+	if clusterID != "" && appID != "" {
+		glog.V(4).Infof("both clusterID %s and appID %s exist, adding to the para for metacluster", clusterID, appID)
+		pa[normClusterID] = clusterID
+		pa[normAPPID] = appID
+	}
 	req := map[string]interface{}{
 		"eventId":   rand.Uint32(),
 		"timestamp": time.Now().Unix(),
@@ -69,7 +82,7 @@ func GetTkeCredential() (*CredentialData, error) {
 		"password":  "cloudprovider",
 		"interface": map[string]interface{}{
 			"interfaceName": "NORM.AssumeTkeCredential",
-			"para":          map[string]interface{}{},
+			"para":          pa,
 		},
 	}
 
