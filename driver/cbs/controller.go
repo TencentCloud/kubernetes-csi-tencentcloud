@@ -99,6 +99,9 @@ var (
 		mux:             &sync.Mutex{},
 		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
 	}
+
+	CVMNodeIDPrefix = "ins-"
+	CVMNodeIDLength = 12
 )
 
 type cbsController struct {
@@ -555,6 +558,10 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	diskId := req.VolumeId
 	instanceId := req.NodeId
 
+	if !(strings.HasPrefix(instanceId, CVMNodeIDPrefix) && len(instanceId) == CVMNodeIDLength) {
+		glog.Infof("ControllerPublishVolume: attach disk %s to node %s, but the node is eklet, skip attach in controller.", diskId, instanceId)
+		return &csi.ControllerPublishVolumeResponse{}, nil
+	}
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
@@ -643,6 +650,11 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	diskId := req.VolumeId
 
+	instanceId := req.NodeId
+	if !(strings.HasPrefix(instanceId, CVMNodeIDPrefix) && len(instanceId) == CVMNodeIDLength) {
+		glog.Infof("ControllerUnpublishVolume: detach disk %s from node %s, but the node is eklet, skip attach in controller.", diskId, instanceId)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)

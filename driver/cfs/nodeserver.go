@@ -59,7 +59,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	// parse parameters
 	mountPath := req.GetTargetPath()
 	opt := &cfsOptions{}
-
 	for key, value := range req.GetVolumeContext() {
 		switch strings.ToLower(key) {
 		case "host":
@@ -74,7 +73,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			opt.FSID = value
 		}
 	}
-
+    //mountOptions := req.VolumeCapability.GetMount().MountFlags
 	// check parameters
 	if mountPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "req.GetTargetPath() is empty")
