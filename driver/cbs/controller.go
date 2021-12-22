@@ -420,7 +420,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	glog.Infof("createCbsReq: %+v", createCbsReq)
-
 	sTimeForCreateDisks := time.Now()
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
 	if err != nil {
@@ -444,7 +443,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-
 	for {
 		select {
 		case <-ticker.C:
@@ -466,11 +464,17 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 						if *d.DiskState == StatusAttached || *d.DiskState == StatusUnattached {
 							disk = d
 							if aspId != "" {
+								glog.Infof("try to bind disk %s to aspId: %s", diskId, aspId)
 								bindReq := cbs.NewBindAutoSnapshotPolicyRequest()
 								bindReq.AutoSnapshotPolicyId = &aspId
 								bindReq.DiskIds = []*string{disk.DiskId}
-								_, err := ctrl.cbsClient.BindAutoSnapshotPolicy(bindReq)
+								basp, err := ctrl.cbsClient.BindAutoSnapshotPolicy(bindReq)
 								if err != nil {
+									glog.Errorf("failed to bind snapshot policy, err: %v", err)
+								} else {
+									if basp.Response != nil && basp.Response.RequestId != nil {
+										glog.Infof("success bind disk %s to aspId: %s, the requesetID is %s", diskId, aspId, *basp.Response.RequestId)
+									}
 
 								}
 							}
