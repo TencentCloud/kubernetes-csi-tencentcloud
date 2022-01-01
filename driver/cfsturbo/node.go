@@ -39,18 +39,11 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
-
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-)
-
-var (
-	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
-		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-	}
 )
 
 const (
@@ -78,42 +71,50 @@ type cfsTurboOptions struct {
 	FSID    string `json:"fsid"`
 }
 
-func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	glog.Infof("NodeStageVolume NodeStageVolumeRequest is: %v", req)
+func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	glog.Infof("NodePublishVolume NodePublishVolumeRequest is: %v", req)
 
-	// common  parameters
-	mountPath := req.GetStagingTargetPath()
+	mountPath := req.GetTargetPath()
 	if mountPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "req.GetStagingTargetPath() is empty")
+		return nil, status.Error(codes.InvalidArgument, "targetPath is empty")
 	}
 
 	opt := &cfsTurboOptions{}
-
 	for key, value := range req.GetVolumeContext() {
 		switch strings.ToLower(key) {
-		case "host":
-			opt.Server = value
-		case "options":
-			opt.Options = value
-		case "fsid":
-			opt.FSID = value
 		case "proto":
 			opt.Proto = value
+		case "fsid":
+			opt.FSID = value
+		case "host":
+			opt.Server = value
+		case "path":
+			opt.Path = value
+		case "options":
+			opt.Options = value
 		}
 	}
 	// check protocol first
 	if opt.Proto == "" {
 		opt.Proto = CFSTurboProtoLustre
 	}
-
 	if opt.FSID == "" {
-		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not be empty")
 	}
 	if opt.Server == "" {
-		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not be empty")
+	}
+	if opt.Path == "" {
+		opt.Path = "/"
+	}
+	if !strings.HasPrefix(opt.Path, "/") {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
 	}
 
 	mo := req.GetVolumeCapability().GetMount().GetMountFlags()
+	if req.Readonly {
+		mo = append(mo, "ro")
+	}
 	if opt.Options != "" {
 		mo = append(mo, opt.Options)
 	}
@@ -134,15 +135,14 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		// cfs turbo need use nfs v3
 		mo = append(mo, "vers=3,nolock,noresvport")
 		// cfs turbo mount node use fsid
-		mountSource = fmt.Sprintf("%s:/%s", opt.Server, opt.FSID)
-
+		mountSource = fmt.Sprintf("%s:/%s%s", opt.Server, opt.FSID, opt.Path)
 	case CFSTurboProtoLustre:
 		//check cfs lustre core kmod install
 		err := exec.Command("/bin/bash", "-c", fmt.Sprintf("lsmod | grep %s", CFSTurboLustreKernelModule)).Run()
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
 		}
-		mountSource = fmt.Sprintf("%s@tcp0:/%s", opt.Server, opt.FSID)
+		mountSource = fmt.Sprintf("%s@tcp0:/%s%s", opt.Server, opt.FSID, opt.Path)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Unsupport protocol type")
 	}
@@ -162,7 +162,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	}
 
 	if !notMnt {
-		return &csi.NodeStageVolumeResponse{}, nil
+		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	err = ns.mounter.Mount(mountSource, mountPath, opt.Proto, mo)
@@ -176,93 +176,6 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &csi.NodeStageVolumeResponse{}, nil
-}
-
-func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	glog.Infof("NodeUnstageVolume NodeUnstageVolumeRequest is: %v", req)
-
-	targetPath := req.GetStagingTargetPath()
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "Targetpath not found")
-		}
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	if notMnt {
-		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
-
-	err = util.CleanupMountPoint(req.GetStagingTargetPath(), ns.mounter, false)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &csi.NodeUnstageVolumeResponse{}, nil
-}
-
-func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	glog.Infof("NodePublishVolume NodePublishVolumeRequest is: %v", req)
-
-	stagingTargetPath := req.GetStagingTargetPath()
-	if stagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "req.GetStagingTargetPath() is empty is empty")
-	}
-	targetPath := req.GetTargetPath()
-	if targetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "targetPath is empty")
-	}
-
-	opt := &cfsTurboOptions{}
-
-	for key, value := range req.GetVolumeContext() {
-		switch strings.ToLower(key) {
-		case "path":
-			opt.Path = value
-		case "proto":
-			opt.Proto = value
-		}
-	}
-	mo := req.VolumeCapability.GetMount().MountFlags
-	mo = append(mo, "bind")
-
-	if req.Readonly {
-		mo = append(mo, "ro")
-	}
-
-	// check protocol first
-	if opt.Proto == "" {
-		opt.Proto = CFSTurboProtoLustre
-	}
-	//check path
-	if opt.Path == "" {
-		opt.Path = "/"
-	}
-	if !strings.HasPrefix(opt.Path, "/") {
-		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
-	}
-
-	// get global mount sub directory bind mount
-
-	mountSource := fmt.Sprintf("%s/%s%s", stagingTargetPath, CFSTurboProtoNFSDefaultDIR, opt.Path)
-
-	if _, err := os.Stat(targetPath); err != nil {
-		if os.IsNotExist(err) {
-			err := os.MkdirAll(targetPath, 0750)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-		} else {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
-	}
-
-	if err := ns.mounter.Mount(mountSource, targetPath, opt.Proto, mo); err != nil {
-		glog.Errorf("NodePublishVolume: Mount error target %v error %v", targetPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -273,18 +186,23 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if targetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "req.GetTargetPath() is empty")
 	}
+
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "Targetpath not found")
+			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if notMnt {
+		if err = os.Remove(targetPath); err != nil {
+			glog.Errorf("NodeUnpublishVolume: Remove targetPath %v error %v", targetPath, err)
+		}
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
-	if err := ns.mounter.Unmount(targetPath); err != nil {
+	err = util.CleanupMountPoint(req.GetTargetPath(), ns.mounter, false)
+	if err != nil {
 		glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -292,20 +210,18 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	glog.Infof("NodeGetCapabilities: called with args %+v", *req)
-	var caps []*csi.NodeServiceCapability
-	for _, cap := range nodeCaps {
-		c := &csi.NodeServiceCapability{
-			Type: &csi.NodeServiceCapability_Rpc{
-				Rpc: &csi.NodeServiceCapability_RPC{
-					Type: cap,
-				},
-			},
-		}
-		caps = append(caps, c)
-	}
-	return &csi.NodeGetCapabilitiesResponse{Capabilities: caps}, nil
+func (ns *nodeServer) NodeStageVolume(
+	ctx context.Context,
+	req *csi.NodeStageVolumeRequest) (
+	*csi.NodeStageVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (ns *nodeServer) NodeUnstageVolume(
+	ctx context.Context,
+	req *csi.NodeUnstageVolumeRequest) (
+	*csi.NodeUnstageVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (ns *nodeServer) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
