@@ -1,5 +1,8 @@
 # kubernetes-csi-tencentcloud
 
+## Important Release Note
+User should apply the secret.yaml to to cluster, otherwise the csi will fail to provsion\attach because of access authority.
+
 `kubernetes-csi-tencentloud` plugins implement interface of [CSI](https://github.com/container-storage-interface/spec)。It can enable your Container Orchestrator use Tencent Cloud storage。
 
 ## Version Support
