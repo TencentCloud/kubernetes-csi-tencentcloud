@@ -19,20 +19,20 @@ package cfs
 import (
 	"errors"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
-	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"k8s.io/kubernetes/pkg/volume"
-	"k8s.io/utils/mount"
 	"net"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/glog"
+	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/kubernetes/pkg/volume"
+	"k8s.io/utils/mount"
 )
 
 const (
@@ -56,8 +56,12 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	glog.Infof("NodePublishVolume NodePublishVolumeRequest is: %v", req)
 
-	// parse parameters
 	mountPath := req.GetTargetPath()
+	if mountPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "req.GetTargetPath() is empty")
+	}
+
+	// parse parameters
 	opt := &cfsOptions{}
 	for key, value := range req.GetVolumeContext() {
 		switch strings.ToLower(key) {
@@ -73,11 +77,8 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			opt.FSID = value
 		}
 	}
-    //mountOptions := req.VolumeCapability.GetMount().MountFlags
+
 	// check parameters
-	if mountPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "req.GetTargetPath() is empty")
-	}
 	if opt.Server == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
 	}
@@ -94,14 +95,13 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if opt.Path == "" {
 		opt.Path = "/"
 	}
-
 	if !strings.HasPrefix(opt.Path, "/") {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path format is illegal")
 	}
 
 	//check version
 	if opt.Vers == "" {
-		opt.Vers = "4"
+		opt.Vers = "3"
 	}
 
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
@@ -115,7 +115,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
-
 	if !notMnt {
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
@@ -124,17 +123,20 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetReadonly() {
 		mo = append(mo, "ro")
 	}
-
 	if opt.Options != "" {
 		mo = append(mo, strings.Split(opt.Options, ",")...)
 	}
 	mo = append(mo, fmt.Sprintf("vers=%s", opt.Vers))
 
-	// cfs use nfs v3 protocol need extra mount option
+	// cfs need extra mount option
+	if opt.FSID != "" {
+		mo = append(mo, "noresvport")
+	}
 	if opt.Vers == "3" {
 		opt.Path = fmt.Sprintf("/%s%s", opt.FSID, opt.Path)
 		mo = append(mo, "nolock,proto=tcp")
 	}
+
 	source := fmt.Sprintf("%s:%s", opt.Server, opt.Path)
 
 	glog.Infof("CFS server %s mount option is: %v", source, mo)
@@ -204,6 +206,7 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 		}),
 	}, nil
 }
+
 func nodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) []*csi.NodeServiceCapability {
 	var nsc []*csi.NodeServiceCapability
 	for _, n := range nl {
