@@ -99,9 +99,16 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path format is illegal")
 	}
 
-	//check version
+	if opt.Vers == "3" && opt.FSID == "" {
+		glog.Warningf("cfs v3 need fsid to connect the cfs server")
+	}
+
 	if opt.Vers == "" {
-		opt.Vers = "3"
+		if opt.FSID == "" {
+			opt.Vers = "4"
+		} else {
+			opt.Vers = "3"
+		}
 	}
 
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
@@ -133,7 +140,9 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		mo = append(mo, "noresvport")
 	}
 	if opt.Vers == "3" {
-		opt.Path = fmt.Sprintf("/%s%s", opt.FSID, opt.Path)
+		if opt.FSID != "" {
+			opt.Path = fmt.Sprintf("/%s%s", opt.FSID, opt.Path)
+		}
 		mo = append(mo, "nolock,proto=tcp")
 	}
 
