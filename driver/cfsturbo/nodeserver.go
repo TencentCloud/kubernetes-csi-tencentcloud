@@ -57,7 +57,8 @@ const (
 
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
-	mounter mount.Interface
+	mounter     mount.Interface
+	VolumeLocks *utils.VolumeLocks
 }
 
 type cfsTurboOptions struct {
@@ -105,6 +106,11 @@ func (ns *nodeServer) NodeStageVolume(
 		mo = append(mo, opt.Options)
 	}
 
+	if acquired := ns.VolumeLocks.TryAcquire(opt.FSID); !acquired {
+		return nil, status.Errorf(codes.Aborted, utils.VolumeOperationAlreadyExistsFmt, opt.FSID)
+	}
+	defer ns.VolumeLocks.Release(opt.FSID)
+
 	var mountSource string
 
 	switch opt.Proto {
@@ -135,11 +141,6 @@ func (ns *nodeServer) NodeStageVolume(
 	}
 	glog.Infof("CFS server %s mount option is: %v", mountSource, mo)
 
-	err := UpdateCfsturboConfig(opt.FSID, req.GetVolumeId())
-	if err != nil {
-		glog.Errorf("UpdateCfsturboConfig failed, err: %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
 	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, opt.FSID)
 	glog.Infof("Global mountPath: %v", mountPath)
 
@@ -156,6 +157,11 @@ func (ns *nodeServer) NodeStageVolume(
 		}
 	}
 	if !notMnt {
+		err = AddVolumeIdToCfsturboConfig(opt.FSID, req.GetVolumeId())
+		if err != nil {
+			glog.Errorf("AddVolumeIdToCfsturboConfig failed, err: %v", err)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
@@ -170,6 +176,12 @@ func (ns *nodeServer) NodeStageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	err = AddVolumeIdToCfsturboConfig(opt.FSID, req.GetVolumeId())
+	if err != nil {
+		glog.Errorf("AddVolumeIdToCfsturboConfig failed, err: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -179,7 +191,7 @@ func (ns *nodeServer) NodeUnstageVolume(
 	*csi.NodeUnstageVolumeResponse, error) {
 	glog.Infof("NodeUnstageVolume NodeUnstageVolumeRequest is: %v", req)
 
-	fsid, err := GetFSIDfromCfsturboConfig(req.GetVolumeId())
+	fsid, err := GetFSIDByVolumeId(req.GetVolumeId())
 	if err != nil {
 		glog.Errorf("Get fsid from cfsturboConfigName failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -189,27 +201,31 @@ func (ns *nodeServer) NodeUnstageVolume(
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
-	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
+	if acquired := ns.VolumeLocks.TryAcquire(fsid); !acquired {
+		return nil, status.Errorf(codes.Aborted, utils.VolumeOperationAlreadyExistsFmt, fsid)
+	}
+	defer ns.VolumeLocks.Release(fsid)
+
+	needUmount, err := DeleteVolumeIdFromCfsturboConfig(req.GetVolumeId(), fsid)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "MountPath not found")
-		}
+		glog.Errorf("DeleteVolumeIdFromCfsturboConfig failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if notMnt {
+	if !needUmount {
+		glog.Infof("FSID %s is still in use, skip node unstage", fsid)
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
-
+	
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
 	err = utils.CleanupMountPoint(mountPath, ns.mounter, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = DeleteFSIDInCfsturboConfig(mountPath, fsid)
+	err = DeleteCfsturboConfig(fsid)
 	if err != nil {
-		glog.Warningf("Delete fsid %s in cfsturboConfigName failed, err: %v", fsid, err)
-		return &csi.NodeUnstageVolumeResponse{}, nil
+		glog.Errorf("DeleteCfsturboConfig failed, err: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil

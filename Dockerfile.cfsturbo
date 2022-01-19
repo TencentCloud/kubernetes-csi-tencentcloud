@@ -1,7 +1,7 @@
-FROM golang:1.14.1-stretch as builder
+FROM golang:1.16 as builder
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
-RUN go build -v --ldflags ' -extldflags "-static"' -o csi-tencentcloud-cfsturbo cmd/cfsturbo/main.go 
+RUN GO111MODULE=off go build -v --ldflags ' -extldflags "-static"' -o csi-tencentcloud-cfsturbo cmd/cfsturbo/main.go
 
 FROM centos:7.6.1810
 LABEL maintainers="TencentCloud TKE Authors"

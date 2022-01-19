@@ -20,6 +20,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/utils"
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
@@ -67,6 +68,7 @@ func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
 		mounter:           mounter,
+		VolumeLocks:       utils.NewVolumeLocks(),
 	}
 }
 

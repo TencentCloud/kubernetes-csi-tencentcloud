@@ -2,45 +2,28 @@ package cfsturbo
 
 import (
 	"encoding/json"
+	"github.com/golang/glog"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
-	"sync"
-
-	"github.com/golang/glog"
+	"path/filepath"
 )
 
 const (
 	cfsturboGlobalPath = "/etc/cfsturbo/global"
-	cfsturboConfigName = "cfsturboConfig"
+	cfsturboConfigPath = "/etc/cfsturbo/global/config"
 )
 
-type File struct {
-	mu   sync.RWMutex
-	File string
-}
-
-func (f *File) SafeWrite(data []byte) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	return ioutil.WriteFile(f.File, data, 0644)
-}
-
-func WriteCfsturboConfig(fsConfig map[string][]string) error {
-	val, err := json.Marshal(fsConfig)
+func WriteCfsturboConfig(cfsturboConfig []string, fsid string) error {
+	val, err := json.Marshal(cfsturboConfig)
 	if err != nil {
-		glog.Errorf("Marshal fsConfig failed, err: %v", err)
+		glog.Errorf("Marshal cfsturboConfig failed, err: %v", err)
 		return err
 	}
 
-	filepath := path.Join(cfsturboGlobalPath, cfsturboConfigName)
-	file := File{
-		mu:   sync.RWMutex{},
-		File: filepath,
-	}
-	err = file.SafeWrite(val)
+	path := path.Join(cfsturboConfigPath, fsid)
+	err = ioutil.WriteFile(path, val, 0644)
 	if err != nil {
 		return err
 	}
@@ -48,98 +31,85 @@ func WriteCfsturboConfig(fsConfig map[string][]string) error {
 	return nil
 }
 
-func LoadCfsturboConfig() (map[string][]string, error) {
-	fsConfig := make(map[string][]string)
+func GetCfsturboConfigByFSID(fsid string) ([]string, error) {
+	cfsturboConfig := make([]string, 0)
 
-	_, err := os.Stat(path.Join(cfsturboGlobalPath, cfsturboConfigName))
+	_, err := os.Stat(path.Join(cfsturboConfigPath, fsid))
 	if err != nil {
 		if os.IsNotExist(err) {
-			err := WriteCfsturboConfig(fsConfig)
+			glog.Infof("Create empty cfsturboConfig %s", fsid)
+			err := WriteCfsturboConfig(cfsturboConfig, fsid)
 			if err != nil {
+				glog.Errorf("Create empty cfsturboConfig %s failed, err: %v", fsid, err)
 				return nil, err
 			}
-			return fsConfig, nil
+			return cfsturboConfig, nil
 		} else {
 			return nil, err
 		}
 	}
 
-	fileContents, err := ioutil.ReadFile(path.Join(cfsturboGlobalPath, cfsturboConfigName))
+	fileContents, err := ioutil.ReadFile(path.Join(cfsturboConfigPath, fsid))
 	if err != nil {
-		glog.Errorf("Read cfsturboConfig %s failed, err: %v", path.Join(cfsturboGlobalPath, cfsturboConfigName), err)
+		glog.Errorf("Read cfsturboConfig %s failed, err: %v", fsid, err)
 		return nil, err
 	}
 
-	err = json.Unmarshal(fileContents, &fsConfig)
+	err = json.Unmarshal(fileContents, &cfsturboConfig)
 	if err != nil {
-		glog.Errorf("Unmarshal fsConfig failed, err: %v", err)
+		glog.Errorf("Unmarshal cfsturboConfig %s failed, err: %v", fsid, err)
 		return nil, err
 	}
 
-	return fsConfig, nil
+	return cfsturboConfig, nil
 }
 
-func UpdateCfsturboConfig(fsid, volumeId string) error {
-	needUpdate := false
+func AddVolumeIdToCfsturboConfig(fsid, volumeId string) error {
+	_, err := os.Stat(cfsturboConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			glog.Infof("Create cfsturboConfigPath %s", cfsturboConfigPath)
+			err := os.MkdirAll(cfsturboConfigPath, 0644)
+			if err != nil {
+				glog.Errorf("Create cfsturboConfigPath %s failed, err: %v", cfsturboConfigPath, err)
+				return err
+			}
+		} else {
+			return err
+		}
+	}
 
-	cfsturboConfig, err := LoadCfsturboConfig()
+	cfsturboConfig, err := GetCfsturboConfigByFSID(fsid)
 	if err != nil {
 		return err
 	}
 
-	for id, volumeIds := range cfsturboConfig {
-		if id == fsid {
-			continue
-		}
-		for n, vid := range volumeIds {
-			if vid == volumeId {
-				volumeIds = append(volumeIds[:n], volumeIds[n+1:]...)
-				cfsturboConfig[id] = volumeIds
-				needUpdate = true
-			}
+	for _, vid := range cfsturboConfig {
+		if vid == volumeId {
+			return nil
 		}
 	}
 
-	if _, ok := cfsturboConfig[fsid]; !ok {
-		cfsturboConfig[fsid] = []string{volumeId}
-		needUpdate = true
-	}
-
-	if !strings.Contains(strings.Join(cfsturboConfig[fsid], ","), volumeId) {
-		cfsturboConfig[fsid] = append(cfsturboConfig[fsid], volumeId)
-		needUpdate = true
-	}
-
-	if needUpdate {
-		glog.Infof("Update cfsturboConfig: %v", cfsturboConfig)
-		err := WriteCfsturboConfig(cfsturboConfig)
-		if err != nil {
-			return err
-		}
+	glog.Infof("Add volumeId %s to cfsturboConfig %s: %v", volumeId, fsid, cfsturboConfig)
+	cfsturboConfig = append(cfsturboConfig, volumeId)
+	err = WriteCfsturboConfig(cfsturboConfig, fsid)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func GetFSIDfromCfsturboConfig(volumeId string) (string, error) {
-	cfsturboConfig, err := LoadCfsturboConfig()
+func GetFSIDByVolumeId(volumeId string) (string, error) {
+	cfsturboConfigs, err := LoadCfsturboConfigs()
 	if err != nil {
 		return "", err
 	}
 
-	for fsid, volumeIds := range cfsturboConfig {
-		for n, vid := range volumeIds {
+	for fsid, cfsturboConfig := range cfsturboConfigs {
+		for _, vid := range cfsturboConfig {
 			if vid == volumeId {
-				if len(volumeIds) == 1 {
-					return fsid, nil
-				}
-				volumeIds = append(volumeIds[:n], volumeIds[n+1:]...)
-				cfsturboConfig[fsid] = volumeIds
-				err := WriteCfsturboConfig(cfsturboConfig)
-				if err != nil {
-					return "", err
-				}
-				return "", nil
+				return fsid, nil
 			}
 		}
 	}
@@ -147,30 +117,66 @@ func GetFSIDfromCfsturboConfig(volumeId string) (string, error) {
 	return "", nil
 }
 
-func DeleteFSIDInCfsturboConfig(mountPath, fsid string) error {
-	needDelete := false
+func LoadCfsturboConfigs() (map[string][]string, error) {
+	cfsturboConfigs := make(map[string][]string)
+	err := filepath.Walk(cfsturboConfigPath, func(path string, info fs.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
 
-	_, err := os.Stat(mountPath)
+		fileContents, err := ioutil.ReadFile(path)
+		if err != nil {
+			glog.Errorf("Read cfsturboConfig %s failed, err: %v", info.Name(), err)
+			return err
+		}
+
+		cfsturboConfig := make([]string, 0)
+		err = json.Unmarshal(fileContents, &cfsturboConfig)
+		if err != nil {
+			glog.Errorf("Unmarshal cfsturboConfig %s failed, err: %v", info.Name(), err)
+			return err
+		}
+
+		cfsturboConfigs[info.Name()] = cfsturboConfig
+		return nil
+	})
 	if err != nil {
-		if os.IsNotExist(err) {
-			needDelete = true
-		} else {
-			return err
-		}
+		return nil, err
 	}
 
-	if needDelete {
-		cfsturboConfig, err := LoadCfsturboConfig()
-		if err != nil {
-			return err
-		}
+	return cfsturboConfigs, nil
+}
 
-		delete(cfsturboConfig, fsid)
-		err = WriteCfsturboConfig(cfsturboConfig)
-		if err != nil {
-			return err
-		}
+func DeleteVolumeIdFromCfsturboConfig(volumeId, fsid string) (bool, error) {
+	cfsturboConfig, err := GetCfsturboConfigByFSID(fsid)
+	if err != nil {
+		glog.Errorf("Get cfsturboConfig by FSID %s failed, err: %v", fsid, err)
+		return false, err
 	}
 
-	return nil
+	if len(cfsturboConfig) == 1 {
+		if cfsturboConfig[0] == volumeId {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	glog.Infof("Delete volumeId %s from cfsturboConfig %s: %v", volumeId, fsid, cfsturboConfig)
+	for n, vid := range cfsturboConfig {
+		if vid == volumeId {
+			cfsturboConfig = append(cfsturboConfig[:n], cfsturboConfig[n+1:]...)
+			break
+		}
+	}
+	err = WriteCfsturboConfig(cfsturboConfig, fsid)
+	if err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
+func DeleteCfsturboConfig(fsid string) error {
+	glog.Infof("Delete cfsturboConfig %s", fsid)
+	return os.RemoveAll(path.Join(cfsturboConfigPath, fsid))
 }
