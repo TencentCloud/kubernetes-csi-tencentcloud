@@ -10,5 +10,5 @@ LABEL description="TencentCloud CFS CSI Plugin"
 
 # Copy cfsplugin from build _output directory
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-tencentcloud-cfs /csi-tencentcloud-cfs
-RUN apk add nfs-utils jq
+RUN apk add nfs-utils jq && echo "hosts: files dns" > /etc/nsswitch.conf
 ENTRYPOINT ["/csi-tencentcloud-cfs"]
