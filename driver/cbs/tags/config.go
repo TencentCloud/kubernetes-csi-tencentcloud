@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	glog "k8s.io/klog"
+	"github.com/golang/glog"
 )
 
 const (

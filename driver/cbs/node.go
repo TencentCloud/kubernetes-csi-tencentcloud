@@ -176,6 +176,37 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	intreeStagingPath := convertToIntreeStagingPath(stagingTargetPath, req.VolumeId)
+	glog.Infof("convert csi target from %s to intreeStagingPath %s", stagingTargetPath, intreeStagingPath)
+	if intreeStagingPath == "" {
+		glog.Infof("skip to unstage for intreeStagingPath %s", intreeStagingPath)
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+	refs, err := node.mounter.GetMountRefs(intreeStagingPath)
+	if err != nil || util.HasMountRefs(intreeStagingPath, refs) {
+		if err == nil {
+			err = fmt.Errorf("The device mount path %q is still mounted by other references %v", intreeStagingPath, refs)
+		}
+		glog.Infof("skip to unstage for intreeStagingPath %s, err: %v", intreeStagingPath, err)
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+
+	if err := node.mounter.Unmount(intreeStagingPath); err != nil {
+		glog.Errorf("NodeUnstageVolume: Unmount intreeStagingPath %v error %v", intreeStagingPath, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	mnt, err := util.IsDirMounted(node.mounter, intreeStagingPath)
+	if err != nil {
+		glog.Infof("IsDirMounted check failed, skip to unstage for intreeStagingPath %s, err: %v", intreeStagingPath, err)
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+	if !mnt {
+		glog.Infof("dir not mounted, deleting it [%s]", intreeStagingPath)
+		if err := os.Remove(intreeStagingPath); err != nil && !os.IsNotExist(err) {
+			glog.Infof("failed to remove dir [%s], skip to unstage, err: %v", intreeStagingPath, err)
+			return &csi.NodeUnstageVolumeResponse{}, nil
+		}
+	}
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -244,6 +275,19 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	intreeTargetPath := convertToIntreeTargetPath(targetPath)
+	glog.Infof("convert csi target from %s to intreeTargetPath %s", targetPath, intreeTargetPath)
+	if pathExists, pathErr := util.PathExists(intreeTargetPath); pathErr != nil {
+		glog.Infof("error checking if intreeTargetPath %q exists: %v", intreeTargetPath, pathErr)
+		return &csi.NodeUnpublishVolumeResponse{}, nil
+	} else if !pathExists {
+		glog.Infof("intreeTargetPath %q does not exist", intreeTargetPath)
+		return &csi.NodeUnpublishVolumeResponse{}, nil
+	}
+	if err := node.mounter.Unmount(intreeTargetPath); err != nil {
+		glog.Errorf("NodeUnpublishVolume: Mount error intreeTargetPath %v error %v", intreeTargetPath, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 

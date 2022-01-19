@@ -97,6 +97,9 @@ spec:
             - name: plugin-mount-dir
               mountPath: /var/lib/kubelet/plugins/kubernetes.io/csi/volumeDevices/
               mountPropagation: "Bidirectional"
+            - name: kubelet-plugin-mount-dir
+              mountPath: /var/lib/kubelet/plugins/kubernetes.io/qcloud-cbs/mounts/
+              mountPropagation: "Bidirectional"
             - mountPath: /dev
               name: host-dev
             - mountPath: /sys
@@ -112,6 +115,10 @@ spec:
         - name: plugin-mount-dir
           hostPath:
             path: /var/lib/kubelet/plugins/kubernetes.io/csi/volumeDevices/
+            type: DirectoryOrCreate
+        - name: kubelet-plugin-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/kubernetes.io/qcloud-cbs/mounts/
             type: DirectoryOrCreate
         - name: registration-dir
           hostPath:
