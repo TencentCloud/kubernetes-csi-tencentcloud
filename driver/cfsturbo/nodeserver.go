@@ -75,13 +75,7 @@ func (ns *nodeServer) NodeStageVolume(
 	glog.Infof("NodeStageVolume NodeStageVolumeRequest is: %v", req)
 
 	// common  parameters
-	mountPath := req.GetStagingTargetPath()
-	if mountPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "req.GetStagingTargetPath() is empty")
-	}
-
 	opt := &cfsTurboOptions{}
-
 	for key, value := range req.GetVolumeAttributes() {
 		switch strings.ToLower(key) {
 		case "host":
@@ -94,11 +88,11 @@ func (ns *nodeServer) NodeStageVolume(
 			opt.Proto = value
 		}
 	}
+
 	// check protocol first
 	if opt.Proto == "" {
 		opt.Proto = CFSTurboProtoLustre
 	}
-
 	if opt.FSID == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
 	}
@@ -127,7 +121,7 @@ func (ns *nodeServer) NodeStageVolume(
 		// cfs turbo need use nfs v3
 		mo = append(mo, "vers=3,nolock,noresvport")
 		// cfs turbo mount node use fsid
-		mountSource = fmt.Sprintf("%s:/%s", opt.Server, opt.FSID)
+		mountSource = fmt.Sprintf("%s:/%s/%s", opt.Server, opt.FSID, CFSTurboProtoNFSDefaultDIR)
 
 	case CFSTurboProtoLustre:
 		//check cfs lustre core kmod install
@@ -135,11 +129,19 @@ func (ns *nodeServer) NodeStageVolume(
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
 		}
-		mountSource = fmt.Sprintf("%s@tcp0:/%s", opt.Server, opt.FSID)
+		mountSource = fmt.Sprintf("%s@tcp0:/%s/%s", opt.Server, opt.FSID, CFSTurboProtoNFSDefaultDIR)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Unsupport protocol type")
 	}
 	glog.Infof("CFS server %s mount option is: %v", mountSource, mo)
+
+	err := UpdateCfsturboConfig(opt.FSID, req.GetVolumeId())
+	if err != nil {
+		glog.Errorf("UpdateCfsturboConfig failed, err: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, opt.FSID)
+	glog.Infof("Global mountPath: %v", mountPath)
 
 	//check mountPath
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
@@ -153,7 +155,6 @@ func (ns *nodeServer) NodeStageVolume(
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
-
 	if !notMnt {
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -178,11 +179,21 @@ func (ns *nodeServer) NodeUnstageVolume(
 	*csi.NodeUnstageVolumeResponse, error) {
 	glog.Infof("NodeUnstageVolume NodeUnstageVolumeRequest is: %v", req)
 
-	targetPath := req.GetStagingTargetPath()
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
+	fsid, err := GetFSIDfromCfsturboConfig(req.GetVolumeId())
+	if err != nil {
+		glog.Errorf("Get fsid from cfsturboConfigName failed, err: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if fsid == "" {
+		glog.Warningf("FSID is empty, skip node unstage")
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "Targetpath not found")
+			return nil, status.Error(codes.NotFound, "MountPath not found")
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -190,22 +201,23 @@ func (ns *nodeServer) NodeUnstageVolume(
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
-	err = utils.CleanupMountPoint(req.GetStagingTargetPath(), ns.mounter, false)
+	err = utils.CleanupMountPoint(mountPath, ns.mounter, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = DeleteFSIDInCfsturboConfig(mountPath, fsid)
+	if err != nil {
+		glog.Warningf("Delete fsid %s in cfsturboConfigName failed, err: %v", fsid, err)
+		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-
 	glog.Infof("NodePublishVolume NodePublishVolumeRequest is: %v", req)
 
-	stagingTargetPath := req.GetStagingTargetPath()
-	if stagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "req.GetStagingTargetPath() is empty is empty")
-	}
 	targetPath := req.GetTargetPath()
 	if targetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "targetPath is empty")
@@ -218,6 +230,8 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			opt.Path = value
 		case "proto":
 			opt.Proto = value
+		case "fsid":
+			opt.FSID = value
 		}
 	}
 	mo := req.VolumeCapability.GetMount().MountFlags
@@ -238,10 +252,12 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if !strings.HasPrefix(opt.Path, "/") {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
 	}
+	if opt.FSID == "" {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
+	}
 
 	// get global mount sub directory bind mount
-
-	mountSource := fmt.Sprintf("%s/%s%s", stagingTargetPath, CFSTurboProtoNFSDefaultDIR, opt.Path)
+	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, opt.FSID, opt.Path)
 
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
