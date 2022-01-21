@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"sync"
 	"time"
 
@@ -17,18 +18,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var (
+const (
 	TKESERVICETYPE    = "ccs"
 	TKERESOURCEPREFIX = "cluster"
 	DriverName        = "com.tencent.cloud.csi.cbs"
+	ProvisionedBy     = "pv.kubernetes.io/provisioned-by"
 )
 
 // UpdateDisksTags 集群和云硬盘标签同步的入口
 func UpdateDisksTags(client kubernetes.Interface, cbsClient *cbs.Client, cvmClient *cvm.Client, tagClient *tag.Client, region, clusterId string) {
-	var err error
-	configMapName := clusterId + "-tags-csi"
-	configMapNamespace := "kube-system"
-
 	updateClient(cbsClient, cvmClient, tagClient)
 	clusterTags, err := GetClusterTags(tagClient, region, clusterId)
 	if err != nil {
@@ -37,12 +35,12 @@ func UpdateDisksTags(client kubernetes.Interface, cbsClient *cbs.Client, cvmClie
 	}
 	glog.Infof("UpdateDisksTags GetClusterTags success, clusterTags: %v", clusterTags)
 
-	configMapTags, err := GetConfigMapTags(client, configMapNamespace, configMapName)
+	configMapTags, err := GetConfigTags()
 	if err != nil {
-		glog.Errorf("UpdateDisksTags GetConfigMapTags failed, err: %v", err)
+		glog.Errorf("UpdateDisksTags GetConfigTags failed, err: %v", err)
 		return
 	}
-	glog.Infof("UpdateDisksTags GetConfigMapTags success, configMapTags: %v", configMapTags)
+	glog.Infof("UpdateDisksTags GetConfigTags success, configTags: %v", configMapTags)
 
 	needReplaceTags, needDeleteTags := CompareTags(clusterTags, configMapTags)
 	if len(needReplaceTags) != 0 || len(needDeleteTags) != 0 {
@@ -52,9 +50,9 @@ func UpdateDisksTags(client kubernetes.Interface, cbsClient *cbs.Client, cvmClie
 			glog.Errorf("UpdateDisksTags updateDisksTags failed")
 			return
 		}
-		err = UpdateConfigMap(client, clusterTags, configMapNamespace, configMapName)
+		err = UpdateConfigTags(clusterTags)
 		if err != nil {
-			glog.Errorf("UpdateDisksTags UpdateConfigMap failed, err: %v", err)
+			glog.Errorf("UpdateDisksTags UpdateConfig failed, err: %v", err)
 			return
 		}
 	}
@@ -107,16 +105,16 @@ func CompareTags(clusterTags, configMapTags map[string]string) (map[string]strin
 
 // updateDisksTags 更新标签云硬盘
 func updateDisksTags(client kubernetes.Interface, cbsClient *cbs.Client, cvmClient *cvm.Client, tagClient *tag.Client, region, clusterId string, needReplaceTags, needDeleteTags map[string]string) error {
-	disksCreatedByCbsProvisioner, err := GetDisks(client)
+	disksCreatedByCbs, err := GetDisks(client)
 	if err != nil {
 		glog.Errorf("updateDisksTags GetDisks failed, err: %v", err)
 		return err
 	}
-	if len(disksCreatedByCbsProvisioner) == 0 {
+	if len(disksCreatedByCbs) == 0 {
 		glog.Infof("updateDisksTags success, there are no disks in this cluster")
 		return nil
 	}
-	glog.Infof("updateDisksTags GetDisks success, disksCreatedByCbsProvisioner: %v", disksCreatedByCbsProvisioner)
+	glog.Infof("updateDisksTags GetDisks success, disksCreatedByCbs: %v", disksCreatedByCbs)
 
 	uin, err := GetOwnerUin()
 	if err != nil {
@@ -128,19 +126,19 @@ func updateDisksTags(client kubernetes.Interface, cbsClient *cbs.Client, cvmClie
 	var wg sync.WaitGroup
 	errNum := 0
 	maxWorkerNum := 5
-	ch := make(chan string, len(disksCreatedByCbsProvisioner))
+	ch := make(chan string, len(disksCreatedByCbs))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if len(disksCreatedByCbsProvisioner) < 5 {
-		maxWorkerNum = len(disksCreatedByCbsProvisioner)
+	if len(disksCreatedByCbs) < 5 {
+		maxWorkerNum = len(disksCreatedByCbs)
 	}
 
 	for i := 0; i < maxWorkerNum; i++ {
 		go worker(cbsClient, cvmClient, tagClient, uin, region, needReplaceTags, needDeleteTags, ch, &errNum, &wg, ctx)
 	}
 
-	for _, diskId := range disksCreatedByCbsProvisioner {
+	for _, diskId := range disksCreatedByCbs {
 		wg.Add(1)
 		ch <- diskId
 	}
@@ -162,14 +160,14 @@ func GetDisks(client kubernetes.Interface) (map[string]string, error) {
 		return nil, err
 	}
 
-	disksCreatedByCbsProvisioner := make(map[string]string, 0)
+	disksCreatedByCbs := make(map[string]string, 0)
 	for _, pv := range pvs.Items {
-		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == DriverName {
-			disksCreatedByCbsProvisioner[pv.Name] = pv.Spec.CSI.VolumeHandle
+		if isCreatedByCbs(pv) && pv.Spec.CSI != nil && pv.Spec.CSI.Driver == DriverName {
+			disksCreatedByCbs[pv.Name] = pv.Spec.CSI.VolumeHandle
 		}
 	}
 
-	return disksCreatedByCbsProvisioner, nil
+	return disksCreatedByCbs, nil
 }
 
 func worker(cbsClient *cbs.Client, cvmClient *cvm.Client, tagClient *tag.Client, uin int64, region string, needReplaceTags, needDeleteTags map[string]string, ch chan string, errNum *int, wg *sync.WaitGroup, ctx context.Context) {
@@ -232,4 +230,18 @@ func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client, tagclient *tag.C
 		cvmClient.WithCredential(&cred)
 		tagclient.WithCredential(&cred)
 	}
+}
+
+// isCreatedByCbs 检测 pv 是否由 cbs-csi 创建
+func isCreatedByCbs(pv corev1.PersistentVolume) bool {
+	v, ok := pv.Annotations[ProvisionedBy]
+	if !ok {
+		return false
+	}
+
+	if v != DriverName {
+		return false
+	}
+
+	return true
 }
