@@ -63,14 +63,14 @@ func main() {
 	metadataClient := metadata.NewMetaData(http.DefaultClient)
 
 	if *region == "" {
-		r, err := metadataClient.Region()
+		r, err := util.GetFromMetadata(metadataClient, metadata.REGION)
 		if err != nil {
 			glog.Fatal(err)
 		}
 		region = &r
 	}
 	if *zone == "" {
-		z, err := metadataClient.Zone()
+		z, err := util.GetFromMetadata(metadataClient, metadata.ZONE)
 		if err != nil {
 			glog.Fatal(err)
 		}
