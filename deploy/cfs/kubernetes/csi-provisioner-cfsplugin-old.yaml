@@ -32,6 +32,13 @@ spec:
     spec:
       serviceAccount: csi-cfs-tencentcloud
       priorityClassName: system-node-critical
+      hostAliases:
+        - ip: "169.254.0.23"
+          hostnames:
+            - "metadata.tencentyun.com"
+        - ip: "169.254.0.95"
+          hostnames:
+            - "cfs.internal.tencentcloudapi.com"
       containers:
         - name: csi-provisioner
           image: ccr.ccs.tencentyun.com/k8scsi/csi-provisioner:0.3.0
