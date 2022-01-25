@@ -264,13 +264,13 @@ func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 }
 
 func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	nodeID, err := node.metadataClient.InstanceID()
+	nodeID, err := util.GetFromMetadata(node.metadataClient, metadata.INSTANCE_ID)
 	if err != nil {
 		glog.Errorf("NodeGetInfo node.metadataClient.InstanceID() error: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	zone, err := node.metadataClient.Zone()
+	zone, err := util.GetFromMetadata(node.metadataClient, metadata.ZONE)
 	if err != nil {
 		glog.Errorf("NodeGetInfo node.metadataClient.Zone() error: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())

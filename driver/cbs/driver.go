@@ -3,6 +3,14 @@ package cbs
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -12,13 +20,6 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"math/rand"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"time"
 )
 
 const (
@@ -117,21 +118,23 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 		}
 	}
 
+	// Sync the tags of cluster and disks
+	if os.Getenv("ADDRESS") != "" {
+		go func() {
+			for {
+				rand.Seed(time.Now().UnixNano())
+				n := rand.Intn(timeInterval)
+				glog.Infof("Begin to sync the tags of cluster and disks after sleeping %d minutes...\n", n)
+				time.Sleep(time.Duration(n) * time.Minute)
+				tags.UpdateDisksTags(drv.client, controller.cbsClient, controller.cvmClient, controller.tagClient, drv.region, drv.clusterId)
+			}
+		}()
+	}
+
 	listener, err := net.Listen(endpoint.Scheme, path.Join(endpoint.Host, endpoint.Path))
 	if err != nil {
 		return err
 	}
-
-	// Sync the tags of cluster and disks
-	go func() {
-		for {
-			rand.Seed(time.Now().UnixNano())
-			n := rand.Intn(timeInterval)
-			glog.Infof("Begin to sync the tags of cluster and disks after sleeping %d minutes...\n", n)
-			time.Sleep(time.Duration(n) * time.Minute)
-			tags.UpdateDisksTags(drv.client, controller.cbsClient, controller.cvmClient, controller.tagClient, drv.region, drv.clusterId)
-		}
-	}()
 
 	return srv.Serve(listener)
 }
