@@ -41,7 +41,7 @@ spec:
             - "cfs.internal.tencentcloudapi.com"
       containers:
         - name: csi-provisioner
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-provisioner:v2.0.4
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v2.0.4
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=3"
@@ -53,7 +53,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:v2.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:v2.0.2
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"

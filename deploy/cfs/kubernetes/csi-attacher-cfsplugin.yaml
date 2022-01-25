@@ -36,7 +36,7 @@ spec:
       priorityClassName: system-node-critical
       containers:
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-attacher:0.3.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-attacher:0.3.0
           args:
             - "--v=3"
             - "--csi-address=$(ADDRESS)"
@@ -48,7 +48,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:0.3.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:0.3.0
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"

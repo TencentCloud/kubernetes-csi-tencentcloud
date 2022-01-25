@@ -23,7 +23,7 @@ spec:
             - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:v2.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v2.0.1
           lifecycle:
             preStop:
               exec:
@@ -50,7 +50,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cfs:v2.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:v2.0.2
           imagePullPolicy: "Always"
           args :
             - "--nodeID=$(NODE_ID)"
