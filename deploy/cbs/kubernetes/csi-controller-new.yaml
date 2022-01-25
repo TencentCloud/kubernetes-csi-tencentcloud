@@ -27,7 +27,7 @@ spec:
             - "tag.internal.tencentcloudapi.com"
       containers:
         - name: csi-provisioner
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-provisioner:v2.0.4
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v2.0.4
           imagePullPolicy: "Always"
           args:
             - "--feature-gates=Topology=true"
@@ -51,7 +51,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: csi-attacher
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-attacher:v3.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-attacher:v3.0.2
           imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
@@ -72,7 +72,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: csi-snapshotter
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-snapshotter:v3.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-snapshotter:v3.0.2
           imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
@@ -92,7 +92,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: snapshot-controller
-          image: ccr.ccs.tencentyun.com/k8scsi/snapshot-controller:v3.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/snapshot-controller:v3.0.2
           imagePullPolicy: "Always"
           args:
             - "--v=5"
@@ -105,7 +105,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: csi-resizer
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-resizer:v1.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-resizer:v1.0.1
           imagePullPolicy: "Always"
           args:
             - "--csi-address=$(ADDRESS)"
@@ -125,7 +125,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v2.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.0.3
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"
