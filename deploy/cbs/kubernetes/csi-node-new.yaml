@@ -13,16 +13,15 @@ spec:
       labels:
         app: cbs-csi-node
     spec:
-      spec:
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
               - matchExpressions:
-                - key: beta.kubernetes.io/instance-type
-                  operator: NotIn
-                  values:
-                  - CHC
+                  - key: beta.kubernetes.io/instance-type
+                    operator: NotIn
+                    values:
+                      - CHC
       serviceAccount: cbs-csi-node-sa
       hostNetwork: true
       hostPID: true
@@ -34,7 +33,7 @@ spec:
             - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:v2.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v2.0.1
           imagePullPolicy: "Always"
           args:
             - "--v=5"
@@ -64,7 +63,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-tencentcloud-cbs:v2.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.0.3
           command:
             - "/csi-tencentcloud-cbs"
           args:
