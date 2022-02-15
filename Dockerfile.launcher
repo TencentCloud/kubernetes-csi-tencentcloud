@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o launcher build/cosfs/launcher.go
 
-FROM phusion/baseimage:0.10.2
+FROM phusion/baseimage:focal-1.0.0
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud COSFS CSI Plugin"
 # Use baseimage-docker's init system.
@@ -11,12 +11,14 @@ CMD ["/sbin/my_init"]
 
 COPY syslog-ng /etc/logrotate.d/syslog-ng
 
-COPY build/cosfs/cosfs_1.0.14-ubuntu16.04_amd64.deb  /root/cosfs_1.0.14-ubuntu16.04_amd64.deb
+RUN apt update && apt upgrade -y
 
-RUN apt update && apt install --no-install-recommends --no-install-suggests -y fuse libxml2 gdb pstack strace \
-    inetutils-tools iproute2 procps inetutils-ping net-tools telnet curl ca-certificates \
-    && dpkg -i /root/cosfs_1.0.14-ubuntu16.04_amd64.deb && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && rm /root/cosfs_1.0.14-ubuntu16.04_amd64.deb
+RUN apt update && apt install --no-install-recommends --no-install-suggests -y automake autotools-dev g++ git libcurl4-gnutls-dev libfuse-dev libssl-dev libxml2-dev make pkg-config fuse
+
+RUN apt update && apt install --no-install-recommends --no-install-suggests -y  libxml2 gdb strace \
+    inetutils-tools iproute2 procps inetutils-ping net-tools telnet curl ca-certificates
+
+RUN git clone https://github.com/tencentyun/cosfs /usr/cosfs && cd /usr/cosfs && ./autogen.sh && ./configure && make && make install
 
 COPY build/cosfs/launcher.sh /etc/service/cos-launcher/run
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/launcher /bin/launcher

@@ -4,13 +4,15 @@ ADD . .
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -ldflags '-extldflags "-static"' -o launcher_${TARGETARCH} build/cosfs/launcher.go
 
-FROM ccr.ccs.tencentyun.com/tkeimages/baseimage:18.04-1.0.0
+FROM phusion/baseimage:focal-1.0.0
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud COSFS CSI Plugin"
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
 
 COPY syslog-ng /etc/logrotate.d/syslog-ng
+
+RUN apt update && apt upgrade -y
 
 RUN apt update && apt install --no-install-recommends --no-install-suggests -y automake autotools-dev g++ git libcurl4-gnutls-dev libfuse-dev libssl-dev libxml2-dev make pkg-config fuse
 

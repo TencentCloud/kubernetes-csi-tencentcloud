@@ -21,7 +21,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:1.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:1.0.1
           imagePullPolicy: "Always"
           resources:
             limits:
