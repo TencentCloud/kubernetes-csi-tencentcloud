@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -41,7 +42,7 @@ type K8sCMCache struct {
 }
 
 const (
-	defaultNamespace = "default"
+	kubeNamespace = "kube-system"
 
 	cmLabel   = "csi-metadata"
 	cmDataKey = "content"
@@ -49,12 +50,13 @@ const (
 	csiMetadataLabelAttr = "com.tencent.cloud.csi.cbs/metadata"
 )
 
-// GetK8sNamespace returns pod namespace. if pod namespace is empty
-// it returns default namespace
+// GetK8sNamespace returns pod namespace.
+// If pod namespace is empty it returns kube-system namespace.
+// If pod namespace stats with cls- it returns kube-system namespace(cbs-csi run in meta cluster).
 func GetK8sNamespace() string {
 	namespace := os.Getenv("POD_NAMESPACE")
-	if namespace == "" {
-		return defaultNamespace
+	if namespace == "" || strings.HasPrefix(namespace, "cls-"){
+		return kubeNamespace
 	}
 	return namespace
 }
