@@ -1,5 +1,5 @@
 # This YAML file contains driver-registrar & csi driver nodeplugin API objects
-# that are necessary to run CSI nodeplugin for cfs
+# that are necessary to run CSI nodeplugin for cfsturbo
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -18,7 +18,7 @@ spec:
       hostNetwork: true
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/k8scsi/csi-node-driver-registrar:v1.2.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v1.2.0
           lifecycle:
             preStop:
               exec:
@@ -43,7 +43,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfsturbo:v1.2.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.1
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
@@ -61,6 +61,9 @@ spec:
             - name: pods-mount-dir
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"
+            - name: global-mount-dir
+              mountPath: /etc/cfsturbo/global
+              mountPropagation: "Bidirectional"
       volumes:
         - name: plugin-dir
           hostPath:
@@ -74,3 +77,7 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
             type: Directory
+        - name: global-mount-dir
+          hostPath:
+            path: /etc/cfsturbo/global
+            type: DirectoryOrCreate
