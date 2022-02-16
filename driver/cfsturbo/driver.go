@@ -71,6 +71,7 @@ func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
 		mounter:           mounter,
+		VolumeLocks:       util.NewVolumeLocks(),
 	}
 }
 

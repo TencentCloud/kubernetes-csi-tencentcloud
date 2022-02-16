@@ -1,25 +1,16 @@
-FROM golang:1.14 as builder
-
+FROM golang:1.16 as builder
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
-
 ADD . .
 
 ARG TARGETARCH
-
 RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH} go build -v -o csi-tencentcloud-cfsturbo_${TARGETARCH} -a -ldflags '-extldflags "-static"' cmd/cfsturbo/main.go
 
-
-
 FROM centos:7.4.1708
-
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud CFS CSI Plugin"
 
 ARG TARGETARCH
-
 # Copy cfsplugin from build _output directory
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-tencentcloud-cfsturbo_${TARGETARCH} /csi-tencentcloud-cfsturbo
-
 RUN yum -y install nfs-utils && yum -y install epel-release && yum -y install jq && yum clean all
-
 ENTRYPOINT ["/csi-tencentcloud-cfsturbo"]
