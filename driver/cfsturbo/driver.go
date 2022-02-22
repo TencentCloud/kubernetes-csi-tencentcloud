@@ -21,9 +21,6 @@ import (
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-	cfsv3 "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719"
-	v3common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	v3profile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	"k8s.io/utils/mount"
 )
 
@@ -36,26 +33,18 @@ type driver struct {
 
 	cap   []*csi.VolumeCapability_AccessMode
 	cscap []*csi.ControllerServiceCapability
-
-	region string
-	zone   string
-	cfsURL string
 }
 
 const (
 	DriverName     = "com.tencent.cloud.csi.cfsturbo"
-	DriverVerision = "1.0.0"
+	DriverVerision = "1.2.1"
 )
 
-func NewDriver(nodeID, endpoint, region, zone, cfsURL string) *driver {
+func NewDriver(nodeID, endpoint string) *driver {
 	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
 
 	d := &driver{}
-
 	d.endpoint = endpoint
-	d.cfsURL = cfsURL
-	d.region = region
-	d.zone = zone
 
 	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
@@ -70,28 +59,14 @@ func NewDriver(nodeID, endpoint, region, zone, cfsURL string) *driver {
 func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
-		mounter:           mounter,
 		VolumeLocks:       util.NewVolumeLocks(),
+		mounter:           mounter,
 	}
 }
 
 func NewControllerServer(d *driver) *controllerServer {
-	secretID, secretKey, token, _ := util.GetSercet()
-
-	cred := v3common.Credential{
-		SecretId:  secretID,
-		SecretKey: secretKey,
-		Token:     token,
-	}
-
-	cpf := v3profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = d.cfsURL
-
-	cfsClient, _ := cfsv3.NewClient(&cred, d.region, cpf)
 	return &controllerServer{
 		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
-		cfsClient:               cfsClient,
-		zone:                    d.zone,
 	}
 }
 

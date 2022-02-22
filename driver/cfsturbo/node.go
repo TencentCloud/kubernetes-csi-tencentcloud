@@ -66,8 +66,8 @@ const (
 
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
-	mounter     mount.Interface
 	VolumeLocks *util.VolumeLocks
+	mounter     mount.Interface
 }
 
 type cfsTurboOptions struct {
@@ -281,6 +281,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
 	}
 
+	if err := ns.CheckGlobalMountPath(opt.FSID, ctx, req); err != nil {
+		glog.Errorf("NodePublishVolume: CheckGlobalMountPath failed, error: %v", err)
+		return nil, err
+	}
+
 	// get global mount sub directory bind mount
 	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, opt.FSID, opt.Path)
 
@@ -347,4 +352,36 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 
 func (ns *nodeServer) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
+}
+
+func (ns *nodeServer) CheckGlobalMountPath(fsid string, ctx context.Context, req *csi.NodePublishVolumeRequest) error {
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
+
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(mountPath, 0750); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			notMnt = true
+		} else {
+			return status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	if notMnt {
+		glog.Infof("Call NodeStageVolume to provide the global mountPath of %s", fsid)
+		stageReq := &csi.NodeStageVolumeRequest{
+			VolumeId:         req.GetVolumeId(),
+			VolumeCapability: req.GetVolumeCapability(),
+			VolumeContext:    req.GetVolumeContext(),
+		}
+
+		_, err := ns.NodeStageVolume(ctx, stageReq)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
