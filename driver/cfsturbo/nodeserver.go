@@ -57,8 +57,8 @@ const (
 
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
-	mounter     mount.Interface
 	VolumeLocks *utils.VolumeLocks
+	mounter     mount.Interface
 }
 
 type cfsTurboOptions struct {
@@ -215,7 +215,7 @@ func (ns *nodeServer) NodeUnstageVolume(
 		glog.Infof("FSID %s is still in use, skip node unstage", fsid)
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
-	
+
 	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
 	err = utils.CleanupMountPoint(mountPath, ns.mounter, false)
 	if err != nil {
@@ -270,6 +270,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	if opt.FSID == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
+	}
+
+	if err := ns.CheckGlobalMountPath(opt.FSID, ctx, req); err != nil {
+		glog.Errorf("NodePublishVolume: CheckGlobalMountPath failed, error: %v", err)
+		return nil, err
 	}
 
 	// get global mount sub directory bind mount
@@ -335,4 +340,36 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 		caps = append(caps, c)
 	}
 	return &csi.NodeGetCapabilitiesResponse{Capabilities: caps}, nil
+}
+
+func (ns *nodeServer) CheckGlobalMountPath(fsid string, ctx context.Context, req *csi.NodePublishVolumeRequest) error {
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
+
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(mountPath, 0750); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			notMnt = true
+		} else {
+			return status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	if notMnt {
+		glog.Infof("Call NodeStageVolume to provide the global mountPath of %s", fsid)
+		stageReq := &csi.NodeStageVolumeRequest{
+			VolumeId:         req.GetVolumeId(),
+			VolumeCapability: req.GetVolumeCapability(),
+			VolumeAttributes: req.GetVolumeAttributes(),
+		}
+
+		_, err := ns.NodeStageVolume(ctx, stageReq)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
