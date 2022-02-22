@@ -34,25 +34,20 @@ type driver struct {
 	cap   []*csi.VolumeCapability_AccessMode
 	cscap []*csi.ControllerServiceCapability
 
-	region string
-	zone   string
 	cfsUrl string
 }
 
 const (
 	DriverName     = "com.tencent.cloud.csi.cfsturbo"
-	DriverVerision = "0.3.0"
+	DriverVerision = "0.3.2"
 )
 
-func NewDriver(nodeID, endpoint, region, zone, cfsUrl string) *driver {
+func NewDriver(nodeID, endpoint, cfsUrl string) *driver {
 	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
 
 	d := &driver{}
-
 	d.endpoint = endpoint
 	d.cfsUrl = cfsUrl
-	d.region = region
-	d.zone = zone
 
 	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
@@ -67,8 +62,8 @@ func NewDriver(nodeID, endpoint, region, zone, cfsUrl string) *driver {
 func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
-		mounter:           mounter,
 		VolumeLocks:       utils.NewVolumeLocks(),
+		mounter:           mounter,
 	}
 }
 

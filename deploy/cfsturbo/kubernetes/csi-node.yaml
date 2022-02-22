@@ -36,7 +36,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfsturbo:v0.3.1
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfsturbo:v0.3.2
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
