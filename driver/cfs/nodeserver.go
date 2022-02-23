@@ -27,7 +27,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -181,7 +180,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return nil, status.Error(codes.NotFound, "Volume not mounted")
 	}
 
-	err = util.CleanupMountPoint(req.GetTargetPath(), ns.mounter, false)
+	err = mount.CleanupMountPoint(req.GetTargetPath(), ns.mounter, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
