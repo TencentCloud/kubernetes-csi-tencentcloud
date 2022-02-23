@@ -226,7 +226,7 @@ func (ns *nodeServer) NodeUnstageVolume(
 	}
 
 	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
-	err = util.CleanupMountPoint(mountPath, ns.mounter, false)
+	err = mount.CleanupMountPoint(mountPath, ns.mounter, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

@@ -9,14 +9,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
-
+	"k8s.io/utils/exec"
 	"k8s.io/utils/mount"
 )
 
@@ -37,7 +36,7 @@ func main() {
 
 	mount := r.Path("/mount").Subrouter()
 	mount.Methods("POST").HandlerFunc(mountHandler)
-	
+
 	server := http.Server{
 		Handler: r,
 	}
@@ -197,7 +196,8 @@ func isFileExisted(filename string) bool {
 }
 
 func execCmd(cmd string) error {
-	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	e := exec.New()
+	output, err := e.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("command %s failed: output %s, error: %v", cmd, string(output), err)
 	}
