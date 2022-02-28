@@ -1,4 +1,5 @@
 FROM golang:1.14 as builder
+
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
 ARG TARGETARCH
@@ -10,7 +11,6 @@ LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud CFS CSI Plugin"
 
 ARG TARGETARCH
-# Copy cfsplugin from build _output directory
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-tencentcloud-cfs_${TARGETARCH} /csi-tencentcloud-cfs
 RUN apk add nfs-utils jq && echo "hosts: files dns" > /etc/nsswitch.conf
 ENTRYPOINT ["/csi-tencentcloud-cfs"]
