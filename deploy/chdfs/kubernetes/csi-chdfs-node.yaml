@@ -1,22 +1,28 @@
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
-  name: csi-chdfsplugin
+  name: csi-chdfs-node
   namespace: kube-system
 spec:
   selector:
     matchLabels:
-      app: csi-chdfsplugin
+      app: csi-chdfs-node
   template:
     metadata:
       labels:
-        app: csi-chdfsplugin
+        app: csi-chdfs-node
     spec:
-      serviceAccount: csi-chdfs-tencentcloud
+      serviceAccount: csi-chdfs-node
+      priorityClassName: system-node-critical
       hostNetwork: true
+      hostPID: true
+      hostAliases:
+        - ip: "169.254.0.23"
+          hostnames:
+            - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-node-driver-registrar:1.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v2.0.1
           lifecycle:
             preStop:
               exec:
@@ -43,52 +49,21 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-plugin-chdfs:v1.0.0
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-chdfs:v1.0.0
           args:
-            - "--nodeID=$(NODE_ID)"
+            - "--v=5"
+            - "--logtostderr=true"
             - "--endpoint=$(CSI_ENDPOINT)"
           env:
-            - name: NODE_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
             - name: CSI_ENDPOINT
               value: unix://plugin/csi.sock
-            - name: TENCENTCLOUD_CBS_API_SECRET_ID
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_ID
-            - name: TENCENTCLOUD_CBS_API_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: csi-tencentcloud
-                  key: TENCENTCLOUD_CBS_API_SECRET_KEY
-          imagePullPolicy: "Always"
           volumeMounts:
-            - name: launcher-socket-dir
-              mountPath: /tmp
+            - name: plugin-dir
+              mountPath: /plugin
             - name: pods-mount-dir
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"
-            - name: plugin-dir
-              mountPath: /plugin
-            - mountPath: /dev
-              name: host-dev
-            - mountPath: /sys
-              name: host-sys
-            - mountPath: /lib/modules
-              name: lib-modules
-              readOnly: true
       volumes:
-        - name: launcher-socket-dir
-          hostPath:
-            path: /etc/csi-chdfs
-            type: DirectoryOrCreate
-        - name: pods-mount-dir
-          hostPath:
-            path: /var/lib/kubelet/pods
-            type: Directory
         - name: plugin-dir
           hostPath:
             path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.chdfs
@@ -97,12 +72,7 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
             type: Directory
-        - name: host-dev
+        - name: pods-mount-dir
           hostPath:
-            path: /dev
-        - name: host-sys
-          hostPath:
-            path: /sys
-        - name: lib-modules
-          hostPath:
-            path: /lib/modules
+            path: /var/lib/kubelet/pods
+            type: Directory

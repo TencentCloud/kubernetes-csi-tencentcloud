@@ -8,6 +8,7 @@ import (
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cfsturbo"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -30,7 +31,7 @@ func main() {
 
 	if *nodeID == "" {
 		metadataClient := metadata.NewMetaData(http.DefaultClient)
-		n, err := metadataClient.InstanceID()
+		n, err := util.GetFromMetadata(metadataClient, metadata.INSTANCE_ID)
 		if err != nil {
 			glog.Fatal(err)
 		}

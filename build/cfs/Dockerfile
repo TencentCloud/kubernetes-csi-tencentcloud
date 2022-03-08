@@ -3,7 +3,7 @@ FROM golang:1.14 as builder
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
 ARG TARGETARCH
-RUN CGO_ENABLED=0  GOOS=linux GOARCH=${TARGETARCH} go build -v -o csi-tencentcloud-cfs_${TARGETARCH} -a -ldflags '-extldflags "-static"' cmd/cfs/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -v -a -ldflags '-extldflags "-static"' -o csi-tencentcloud-cfs_${TARGETARCH} cmd/cfs/main.go
 
 FROM alpine:3.15.0
 
