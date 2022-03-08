@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-    name: pvc-chdfs
+    name: csi-chdfs-pvc
 spec:
   accessModes:
   - ReadWriteMany
   resources:
     requests:
-      storage: 1Gi
+      storage: 10Gi
   # You can specify the pv name manually or just let kubernetes to bind the pv and pvc.
-  # volumeName: pv-chdfs
+  volumeName: csi-chdfs-pv
   # Currently chdfs only supports static provisioning, the StorageClass name should be empty.
   storageClassName: ""

@@ -13,7 +13,6 @@ COS_MULTI_VERSION?=cos-multi
 COS_LAUNCHER_VERSION?=cos-launcher
 COS_LAUNCHER_MULTI_VERSION?=cos-launcher-multi
 CHDFS_VERSION?=chdfs
-CHDFS_LAUNCHER_VERSION?=chdfs-launcher
 CFSTURBO_VERSION?=cfsturbo
 
 all: cbs cfs cos cfsturbo chdfs
@@ -37,8 +36,7 @@ cos:
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cosfs/launcher/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_MULTI_VERSION} --push
 
 chdfs:
-	docker buildx build --platform linux/amd64,linux/arm64 . -f build/chdfs/chdfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION} --push
-	docker buildx build --platform linux/amd64,linux/arm64 . -f build/chdfs/launcher/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs-launcher:${CHDFS_LAUNCHER_VERSION} --push
+	docker buildx build --platform linux/amd64,linux/arm64 . -f build/chdfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION} --push
 
 cfsturbo:
 	docker build . --build-arg TARGETARCH=amd64 -f build/cfsturbo/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_VERSION}
