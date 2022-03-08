@@ -1,24 +1,24 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: pv-chdfs
+  name: csi-chdfs-pv
 spec:
   accessModes:
   - ReadWriteMany
   capacity:
-    storage: 1Gi
+    storage: 10Gi
   csi:
     driver: com.tencent.cloud.csi.chdfs
-    # Specify a unique volumeHandle like pv name or bucket name.
-    volumeHandle: pv-chdfs
+    # Specify a unique volumeHandle like pv name or filesystem id.
+    volumeHandle: csi-chdfs-pv
     volumeAttributes:
       # Allow other users to access [true/false].
       allowother: "true"
       # Any modification of memory will be synchronized to CHDFS in real time [true/false].
-      sync: "fasle"
+      sync: "false"
       # Display details of fuse interface calls [true/false].
       debug: "true"
-      # The name of configMap.
-      configmapname: "chdfs-config"
-      # The namespace of configMap.
-      configmapnamespaces: "kube-system"
+      # The mount url of chdfs mount point.
+      url: "*.chdfs.ap-*.myqcloud.com"
+      # Additional args.
+      additional_args: ""

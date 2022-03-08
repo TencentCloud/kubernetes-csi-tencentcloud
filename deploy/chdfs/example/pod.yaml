@@ -1,21 +1,27 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-    name: pod-chdfs
+  labels:
+    k8s-app: csi-chdfs-pod
+  name: csi-chdfs-pod
 spec:
-  containers:
-  - name: pod-chdfs
-    command: ["tail", "-f", "/etc/hosts"]
-    image: "centos:latest"
-    volumeMounts:
-    - mountPath: /data
-      name: chdfs
-    resources:
-      requests:
-        memory: "50Mi"
-        cpu: "0.1"
-  volumes:
-  - name: chdfs
-    persistentVolumeClaim:
-      # Replaced by your pvc name.
-      claimName: pvc-chdfs
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: csi-chdfs-pod
+  template:
+    metadata:
+      labels:
+        k8s-app: csi-chdfs-pod
+    spec:
+      containers:
+        - image: nginx
+          name: csi-chdfs-pod
+          volumeMounts:
+            - mountPath: /csi-chdfs
+              name: csi-chdfs
+      volumes:
+        - name: csi-chdfs
+          persistentVolumeClaim:
+            # Replaced by your pvc name.
+            claimName: csi-chdfs-pvc
