@@ -38,7 +38,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfsturbo
-          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfsturbo:v0.3.2
+          image: ccr.ccs.tencentyun.com/ccs-dev/csi-tencentcloud-cfsturbo:v0.3.3
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
