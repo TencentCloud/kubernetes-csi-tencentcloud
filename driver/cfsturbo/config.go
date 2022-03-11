@@ -119,6 +119,14 @@ func GetFSIDByVolumeId(volumeId string) (string, error) {
 
 func LoadCfsturboConfigs() (map[string][]string, error) {
 	cfsturboConfigs := make(map[string][]string)
+
+	if _, err := os.Stat(cfsturboConfigPath); err != nil {
+		if os.IsNotExist(err) {
+			return cfsturboConfigs, nil
+		}
+		return nil, err
+	}
+
 	err := filepath.Walk(cfsturboConfigPath, func(path string, info fs.FileInfo, err error) error {
 		if info.IsDir() {
 			return nil

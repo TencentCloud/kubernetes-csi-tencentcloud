@@ -39,7 +39,7 @@ type driver struct {
 
 const (
 	DriverName     = "com.tencent.cloud.csi.cfsturbo"
-	DriverVerision = "0.3.2"
+	DriverVerision = "0.3.3"
 )
 
 func NewDriver(nodeID, endpoint, cfsUrl string) *driver {
