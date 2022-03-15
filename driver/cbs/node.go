@@ -11,6 +11,11 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,13 +23,6 @@ import (
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/utils/exec"
 	"k8s.io/utils/mount"
-
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -133,7 +131,7 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		glog.Errorf("NodeStageVolume: GetDeviceNameFromMount error %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if diskSource == device {
+	if diskSource == device || filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID) == device {
 		glog.Infof("NodeStageVolume: volume %v already staged", diskID)
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -176,41 +174,12 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	intreeStagingPath := convertToIntreeStagingPath(stagingTargetPath, req.VolumeId)
-	glog.Infof("convert csi target from %s to intreeStagingPath %s", stagingTargetPath, intreeStagingPath)
-	if intreeStagingPath == "" {
-		glog.Infof("skip to unstage for intreeStagingPath %s", intreeStagingPath)
-		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
-	refs, err := node.mounter.GetMountRefs(intreeStagingPath)
-	if err != nil || util.HasMountRefs(intreeStagingPath, refs) {
-		if err == nil {
-			err = fmt.Errorf("The device mount path %q is still mounted by other references %v", intreeStagingPath, refs)
-		}
-		glog.Infof("skip to unstage for intreeStagingPath %s, err: %v", intreeStagingPath, err)
-		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
-
-	if err := node.mounter.Unmount(intreeStagingPath); err != nil {
-		glog.Errorf("NodeUnstageVolume: Unmount intreeStagingPath %v error %v", intreeStagingPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	mnt, err := util.IsDirMounted(node.mounter, intreeStagingPath)
-	if err != nil {
-		glog.Infof("IsDirMounted check failed, skip to unstage for intreeStagingPath %s, err: %v", intreeStagingPath, err)
-		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
-	if !mnt {
-		glog.Infof("dir not mounted, deleting it [%s]", intreeStagingPath)
-		if err := os.Remove(intreeStagingPath); err != nil && !os.IsNotExist(err) {
-			glog.Infof("failed to remove dir [%s], skip to unstage, err: %v", intreeStagingPath, err)
-			return &csi.NodeUnstageVolumeResponse{}, nil
-		}
-	}
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (node *cbsNode) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	glog.Infof("NodePublishVolume: start with args %v", *req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
@@ -244,15 +213,25 @@ func (node *cbsNode) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		mountFsType = "ext4"
 	}
 
-	if _, err := os.Stat(target); err != nil {
+	if err := node.checkStagingTargetPath(ctx, req); err != nil {
+		return nil, err
+	}
+
+	notMnt, err := node.mounter.IsLikelyNotMountPoint(target)
+	if err != nil {
 		if os.IsNotExist(err) {
-			err := os.MkdirAll(target, 0750)
-			if err != nil {
+			if err := os.MkdirAll(target, 0750); err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
+			notMnt = true
 		} else {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
+	}
+
+	if !notMnt {
+		glog.Infof("NodePublishVolume: TargetPath %s is already mounted, skipping", target)
+		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	if err := node.mounter.Mount(source, target, mountFsType, mountFlags); err != nil {
@@ -264,30 +243,38 @@ func (node *cbsNode) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 }
 
 func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+	glog.Infof("NodeUnpublishVolume: start with args %v", *req)
+
 	if req.TargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume target path is empty")
 	}
 
 	targetPath := req.TargetPath
 
-	if err := node.mounter.Unmount(targetPath); err != nil {
-		glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
+	if err := node.cleanIntreePath(targetPath, req.VolumeId); err != nil {
+		glog.Errorf("NodeUnpublishVolume: cleanIntreePath failed, error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	intreeTargetPath := convertToIntreeTargetPath(targetPath)
-	glog.Infof("convert csi target from %s to intreeTargetPath %s", targetPath, intreeTargetPath)
-	if pathExists, pathErr := util.PathExists(intreeTargetPath); pathErr != nil {
-		glog.Infof("error checking if intreeTargetPath %q exists: %v", intreeTargetPath, pathErr)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
-	} else if !pathExists {
-		glog.Infof("intreeTargetPath %q does not exist", intreeTargetPath)
+	notMnt, err := node.mounter.IsLikelyNotMountPoint(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			glog.Infof("NodeUnpublishVolume: targetPath %v is already deleted", targetPath)
+			return &csi.NodeUnpublishVolumeResponse{}, nil
+		} else {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+	if notMnt {
+		glog.Infof("NodeUnpublishVolume: targetPath %v is already unmounted", targetPath)
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
-	if err := node.mounter.Unmount(intreeTargetPath); err != nil {
-		glog.Errorf("NodeUnpublishVolume: Mount error intreeTargetPath %v error %v", intreeTargetPath, err)
+
+	if err := mount.CleanupMountPoint(targetPath, node.mounter, false); err != nil {
+		glog.Errorf("NodeUnpublishVolume: Unmount targetPath %v failed, error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -418,6 +405,83 @@ func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil
+}
+
+func (node *cbsNode) checkStagingTargetPath(ctx context.Context, req *csi.NodePublishVolumeRequest) error {
+	stagingTargetPath := req.GetStagingTargetPath()
+
+	notMnt, err := node.mounter.IsLikelyNotMountPoint(stagingTargetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(stagingTargetPath, 0750); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			notMnt = true
+		} else {
+			return status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	if notMnt {
+		glog.Infof("Call NodeStageVolume to prepare the stagingTargetPath %s", stagingTargetPath)
+		stageReq := &csi.NodeStageVolumeRequest{
+			VolumeId:          req.GetVolumeId(),
+			VolumeCapability:  req.GetVolumeCapability(),
+			StagingTargetPath: req.GetStagingTargetPath(),
+		}
+		_, err = node.NodeStageVolume(ctx, stageReq)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (node *cbsNode) cleanIntreePath(targetPath, volumeId string) error {
+	if err := node.cleanIntreeTargetPath(targetPath); err != nil {
+		return err
+	}
+
+	if err := node.cleanIntreeStagingPath(targetPath, volumeId); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (node *cbsNode) cleanIntreeTargetPath(targetPath string) error {
+	intreeTargetPath := convertToIntreeTargetPath(targetPath)
+
+	if pathExists, err := util.PathExists(intreeTargetPath); err != nil {
+		return err
+	} else if !pathExists {
+		return nil
+	}
+
+	glog.Infof("try to clean intreeTargetPath %s", intreeTargetPath)
+	if err := mount.CleanupMountPoint(intreeTargetPath, node.mounter, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (node *cbsNode) cleanIntreeStagingPath(targetPath, volumeId string) error {
+	intreeStagingPath := convertToIntreeStagingPath(targetPath, volumeId)
+
+	if pathExists, err := util.PathExists(intreeStagingPath); err != nil {
+		return err
+	} else if !pathExists {
+		return nil
+	}
+
+	glog.Infof("try to clean intreeStagingPath %s", intreeStagingPath)
+	if err := mount.CleanupMountPoint(intreeStagingPath, node.mounter, false); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (node *cbsNode) getMaxAttachVolumePerNode() int64 {

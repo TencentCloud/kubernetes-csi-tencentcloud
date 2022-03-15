@@ -2,7 +2,6 @@ package cbs
 
 import (
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -66,14 +65,9 @@ func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client, tagclient *tag.C
 }
 
 func convertToIntreeTargetPath(targetPath string) string {
-    return strings.Replace(strings.TrimSuffix(targetPath, "/mount"), "~csi", "~qcloud-cbs", 1)
+	return strings.Replace(strings.TrimSuffix(targetPath, "/mount"), "~csi", "~qcloud-cbs", 1)
 }
 
-func convertToIntreeStagingPath(stagingPath, volumeId string) string {
-    stagingPathList := strings.Split(stagingPath, "/csi/pv/")
-	if len(stagingPathList) != 2 {
-		glog.Info("failed to split stagingPath %s, stagingPathList is %v", stagingPath, stagingPathList)
-		return ""
-	}
-	return stagingPathList[0] + "/qcloud-cbs/mounts/" + volumeId
+func convertToIntreeStagingPath(targetPath, volumeId string) string {
+	return strings.Split(targetPath, "/pods/")[0] + "/plugins/kubernetes.io/qcloud-cbs/mounts/" + volumeId
 }
