@@ -2,13 +2,13 @@ package cbs
 
 import (
 	"fmt"
-	"sync"
-
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
+	"strings"
+	"sync"
 )
 
 type cbsSnapshot struct {
@@ -62,4 +62,12 @@ func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client, tagclient *tag.C
 		cvmClient.WithCredential(&cred)
 		tagclient.WithCredential(&cred)
 	}
+}
+
+func convertToIntreeTargetPath(targetPath string) string {
+	return strings.Replace(strings.TrimSuffix(targetPath, "/mount"), "~csi", "~qcloud-cbs", 1)
+}
+
+func convertToIntreeStagingPath(targetPath, volumeId string) string {
+	return strings.Split(targetPath, "/pods/")[0] + "/plugins/kubernetes.io/qcloud-cbs/mounts/" + volumeId
 }
