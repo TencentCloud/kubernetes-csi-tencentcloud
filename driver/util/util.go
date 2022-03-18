@@ -1,7 +1,13 @@
 package util
 
 import (
+	"os"
+	"strings"
+	"syscall"
+
+	"github.com/golang/glog"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
+	"k8s.io/utils/mount"
 )
 
 const (
@@ -105,4 +111,57 @@ func GetTencentSdkErrCode(err error) string {
 	}
 
 	return string(InternalErr)
+}
+
+// IsCorruptedMnt return true if err is about corrupted mount point
+func IsCorruptedMnt(err error) bool {
+	if err == nil {
+		return false
+	}
+	var underlyingError error
+	switch pe := err.(type) {
+	case nil:
+		return false
+	case *os.PathError:
+		underlyingError = pe.Err
+	case *os.LinkError:
+		underlyingError = pe.Err
+	case *os.SyscallError:
+		underlyingError = pe.Err
+	}
+
+	return underlyingError == syscall.ENOTCONN || underlyingError == syscall.ESTALE || underlyingError == syscall.EIO || underlyingError == syscall.EACCES
+}
+
+// PathExists TODO: clean this up to use pkg/util/file/FileExists
+// PathExists returns true if the specified path exists.
+func PathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else if IsCorruptedMnt(err) {
+		return true, err
+	} else {
+		return false, err
+	}
+}
+
+func HasMountRefs(mountPath string, mountRefs []string) bool {
+	for _, ref := range mountRefs {
+		if !strings.Contains(ref, mountPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsDirMounted(mounter mount.SafeFormatAndMount, mountPath string) (bool, error) {
+	notMnt, err := mounter.IsLikelyNotMountPoint(mountPath)
+	if err != nil && !os.IsNotExist(err) {
+		glog.Error("isDirMounted IsLikelyNotMountPoint test failed for dir [%v]", mountPath)
+		return false, err
+	}
+	return !notMnt, nil
 }
