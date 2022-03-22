@@ -1,6 +1,6 @@
 # kubernetes-csi-tencentcloud
 
-`kubernetes-csi-tencentloud` plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator use Tencent [Cloud Block Storage](https://cloud.tencent.com/product/cbs).
+`kubernetes-csi-tencentloud` plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator to use Tencent [Cloud Block Storage](https://cloud.tencent.com/product/cbs).
 
 ## Features
 * **Static Provisioning** - firstly, have a CBS disk; then, create PV from the CBS disk and consume the PV from container using PVC.
@@ -109,6 +109,7 @@ restore:
 
 ## cbs volume size limit, need pvc or pv
 
+*volume size only supports multiples of 10 (eg: 100, 110, 120)*
 * `CLOUD_PREMIUM`: 10GB-32000GB
 * `CLOUD_SSD`: 20G-32000GB
 * `CLOUD_HSSD`: 20G-32000GB
