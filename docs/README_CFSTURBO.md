@@ -1,6 +1,6 @@
 # kubernetes-csi-tencentcloud
 
-`kubernetes-csi-tencentloud` CFS plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator use Tencent [Cloud File Storage Turbo](https://cloud.tencent.com/product/cfs).
+`kubernetes-csi-tencentcloud` CFS plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator to use Tencent [Cloud File Storage Turbo](https://cloud.tencent.com/product/cfs).
 
 ## Features
 
@@ -14,7 +14,7 @@
 
 * Kubernetes v1.14.x+
 * kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true)
-* feature gates`CSINodeInfo=true,CSIDriverRegistry=true`
+* feature gates `CSINodeInfo=true,CSIDriverRegistry=true`
 
 ### RBAC
 

@@ -1,6 +1,6 @@
 # kubernetes-csi-tencentcloud
 
-`kubernetes-csi-tencentloud` 是腾讯云 `Cloud Block Storage` 服务的一个满足 [CSI](https://github.com/container-storage-interface/spec) 标准实现的插件。这个插件可以让你在 Kubernetes 上使用 Cloud Block Storage。
+`kubernetes-csi-tencentcloud` 是腾讯云 `Cloud Block Storage` 服务的一个满足 [CSI](https://github.com/container-storage-interface/spec) 标准实现的插件。这个插件可以让你在 Kubernetes 上使用 Cloud Block Storage。
 
 ## 特性
 * **Static Provisioning** - 为一个已有的CBS盘创建PV，并在容器中使用PVC来使用它
@@ -110,6 +110,7 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 
 ## 不同类型云盘的大小限制
 
+*云盘大小仅支持 10 的倍数（如: 100, 110, 120）*
 * 高性能云硬盘提供最小 10 GB 到最大 32000 GB 的规格选择。
 * SSD云硬盘提供最小 20 GB 到最大 32000 GB 的规格选择，单块 SSD 云硬盘最高可提供 26000 随机读写IOPS、260MB/s吞吐量的存储性能。
 * 增强型SSD云硬盘提供最小 20 GB 到最大 32000 GB 的规格选择，单盘最高可提供 100000 随机读写IOPS、1000MB/s吞吐量的存储性能。
