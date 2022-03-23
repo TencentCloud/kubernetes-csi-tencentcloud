@@ -1,14 +1,14 @@
 # kubernetes-csi-tencentcloud
 
-`kubernetes-csi-tencentloud` plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator to use Tencent [Cloud Block Storage](https://cloud.tencent.com/product/cbs).
+`kubernetes-csi-tencentcloud` plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator to use Tencent [Cloud Block Storage](https://cloud.tencent.com/product/cbs).
 
 ## Features
 * **Static Provisioning** - firstly, have a CBS disk; then, create PV from the CBS disk and consume the PV from container using PVC.
-* **Dynamic Provisioning** - use PVC to request the Kuberenetes to create the CBS disk on behalf of user and consumes the disk from inside container
+* **Dynamic Provisioning** - use PVC to request the Kubernetes to create the CBS disk on behalf of user and consumes the disk from inside container
     * specify zone - which zone the CBS disk will be provisioned in.
         * `allowedTopologies` - The topology key should be `topology.com.tencent.cloud.csi.cbs/zone`.
-        * `diskZone` in `StorageClass.parameters` - the zone in `diskZone` is prefered. Then, zone in `allowedTopologies`.
-    * **Topology-Aware** - create disk until pod has schedulered, and create disk in the zone which node in. the zone in `diskZone` is prefered
+        * `diskZone` in `StorageClass.parameters` - the zone in `diskZone` is preferred. Then, zone in `allowedTopologies`.
+    * **Topology-Aware** - create disk until pod has been scheduled, and create disk in the zone which node in. the zone in `diskZone` is preferred
 * **Volume Snapshot**
 * **Volume Resizing** - expand volume size
 * **Volume Attach Limit** - the maximum number of CBS disks that can be attached to one node.(20 CBS disks per node)
@@ -95,7 +95,7 @@ restore:
 
 ## StorageClass parameters
 
-**Note**：[examples](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
+**Note**: [examples](https://github.com/TencentCloud/kubernetes-csi-tencentcloud/blob/master/deploy/cbs/examples/storageclass-examples.yaml)
 
 * If there are multiple zones of node in your cluster, you can enable topology-aware scheduling of cbs storage volumes with adding `volumeBindingMode: WaitForFirstConsumer` in storageclass, deploy/examples/storageclass-topology.yaml, because cbs volumes can't attach a node with different zone.
 * diskType: cbs volume type, `CLOUD_PREMIUM`,`CLOUD_SSD`,`CLOUD_HSSD`.

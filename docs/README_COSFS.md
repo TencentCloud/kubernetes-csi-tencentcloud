@@ -3,7 +3,7 @@
 This plugin is able to mount TencentCloud COS buckets to workloads.
 
 * **Static Provisioning** - firstly, create a COS on tencent cloud manually; then mount it inside container
-* **Mount options ** - mount options can be specified in storageclass to define how the volume should be mounted
+* **Mount options** - mount options can be specified in storageclass to define how the volume should be mounted
 
 ## Building
 

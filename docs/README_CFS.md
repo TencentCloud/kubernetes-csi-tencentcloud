@@ -1,11 +1,11 @@
 # kubernetes-csi-tencentcloud
 
-`kubernetes-csi-tencentloud` CFS plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator use Tencent [Cloud File Storage](https://cloud.tencent.com/product/cfs).
+`kubernetes-csi-tencentcloud` CFS plugins implement interface of [CSI](https://github.com/container-storage-interface/spec). It can enable your Container Orchestrator to use Tencent [Cloud File Storage](https://cloud.tencent.com/product/cfs).
 
 ## Features
 * **Static Provisioning** - firstly, create a CFS filesystem on tencent cloud manually; then mount it inside container
-* **Dynamic Provisioning** - use PVC to request the Kuberenetes to create a CFS filesystem on behalf of user and consumes the filesystem from inside container
-* **Mount options ** - mount options can be specified in storageclass to define how the volume should be mounted
+* **Dynamic Provisioning** - use PVC to request the Kubernetes to create a CFS filesystem on behalf of user and consumes the filesystem from inside container
+* **Mount options** - mount options can be specified in storageclass to define how the volume should be mounted
 
 ## CFS CSI Driver on Kubernetes
 
@@ -13,11 +13,11 @@
 
 * Kubernetes v1.13.x+
 * kube-apiserver and kubelet need `--allow-privileged=true` (for v1.15.x+, kubelet defaults to set `--allow-privileged` to true)
-* feature gates`CSINodeInfo=true,CSIDriverRegistry=true`
+* feature gates `CSINodeInfo=true,CSIDriverRegistry=true`
 
 ### tencentcloud yunapi secret
 
-**Note**： If you use tke(Tencent Kubernetes Engine), you may not add `TENCENTCLOUD_API_SECRET_ID` and `TENCENTCLOUD_API_SECRET_KEY`.
+**Note**: If you use tke(Tencent Kubernetes Engine), you may not add `TENCENTCLOUD_API_SECRET_ID` and `TENCENTCLOUD_API_SECRET_KEY`.
 
 ```yaml
 # deploy/cfs/kubernetes/csi-provisioner-cfsplugin.yaml
