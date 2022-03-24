@@ -2,26 +2,26 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    k8s-app: csi-chdfs-pod
-  name: csi-chdfs-pod
+    k8s-app: csi-cfsturbo-pod
+  name: csi-cfsturbo-pod
 spec:
   replicas: 1
   selector:
     matchLabels:
-      k8s-app: csi-chdfs-pod
+      k8s-app: csi-cfsturbo-pod
   template:
     metadata:
       labels:
-        k8s-app: csi-chdfs-pod
+        k8s-app: csi-cfsturbo-pod
     spec:
       containers:
         - image: nginx
-          name: csi-chdfs-pod
+          name: csi-cfsturbo-pod
           volumeMounts:
-            - mountPath: /csi-chdfs
-              name: csi-chdfs
+            - mountPath: /csi-cfsturbo
+              name: csi-cfsturbo
       volumes:
-        - name: csi-chdfs
+        - name: csi-cfsturbo
           persistentVolumeClaim:
             # Replaced by your pvc name.
-            claimName: csi-chdfs-pvc
+            claimName: csi-cfsturbo-pvc
