@@ -168,7 +168,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.Infof("NodeUnpublishVolume NodeUnpublishVolumeRequest is: %v", req)
 
 	targetPath := req.GetTargetPath()
-	_, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
 
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -178,8 +178,12 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = mount.CleanupMountPoint(req.GetTargetPath(), ns.mounter, false)
-	if err != nil {
+	if notMnt {
+		return &csi.NodeUnpublishVolumeResponse{}, nil
+	}
+
+	if err := ns.mounter.Unmount(targetPath); err != nil {
+		glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
