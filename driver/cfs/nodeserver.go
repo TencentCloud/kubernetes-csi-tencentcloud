@@ -168,16 +168,14 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.Infof("NodeUnpublishVolume NodeUnpublishVolumeRequest is: %v", req)
 
 	targetPath := req.GetTargetPath()
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
+	_, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "Targetpath not found")
+			glog.Infof("target path not exist, it's reasonable to assume that the `NodeUnpublishVolume` is successful.")
+			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
 		return nil, status.Error(codes.Internal, err.Error())
-	}
-	if notMnt {
-		return nil, status.Error(codes.NotFound, "Volume not mounted")
 	}
 
 	err = mount.CleanupMountPoint(req.GetTargetPath(), ns.mounter, false)
