@@ -8,7 +8,7 @@ chdfs 插件能够将腾讯云 chdfs 文件系统挂载到对应工作负载中�
 
 通过执行以下命令来构建 chdfs 插件镜像:
 
-```bash
+```sh
 docker build -t ${imageName} -f build/chdfs/Dockerfile .
 ```
 
@@ -18,13 +18,23 @@ docker build -t ${imageName} -f build/chdfs/Dockerfile .
 
 通过执行以下命令来部署 chdfs 插件:
 
-```bash
-kubectl apply -f deploy/chdfs/kubernetes
+**若集群 k8s 版本 >= 1.20**
+```sh
+kubectl apply -f  deploy/chdfs/kubernetes/csidriver-new.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node-rbac.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node.yaml
+```
+
+**若集群 k8s 版本 < 1.20**
+```sh
+kubectl apply -f  deploy/chdfs/kubernetes/csidriver-old.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node-rbac.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node.yaml
 ```
 
 通过执行以下命令来查看插件是否处于 Running 状态:
 
-```bash
+```sh
 $ kubectl get po -n kube-system | grep chdfs
 csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 ```
@@ -42,9 +52,9 @@ csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 
 通过执行以下命令来创建测试 pv:
 
-```bash
+```sh
 # 在 pv 所支持参数中，只有 url 是必须配置的。
-kubectl apply -f deploy/chdfs/example/pv.yaml
+kubectl apply -f deploy/chdfs/examples/pv.yaml
 ```
 
 参数说明：
@@ -86,13 +96,13 @@ kubectl apply -f deploy/chdfs/example/pv.yaml
 
 通过执行以下命令来创建测试 pvc:
 
-```bash
-kubectl apply -f deploy/chdfs/example/pvc.yaml
+```sh
+kubectl apply -f deploy/chdfs/examples/pvc.yaml
 ```
 
 通过执行以下命令来查看 pvc 与 pv 的绑定状态:
 
-```bash
+```sh
 $ kubectl get pvc
 NAME            STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
 csi-chdfs-pvc   Bound    csi-chdfs-pv   10Gi       RWX                           39m
@@ -102,13 +112,13 @@ csi-chdfs-pvc   Bound    csi-chdfs-pv   10Gi       RWX                          
 
 通过执行以下命令来创建测试 pod:
 
-```bash
-kubectl apply -f deploy/chdfs/example/pod.yaml
+```sh
+kubectl apply -f deploy/chdfs/examples/pod.yaml
 ```
 
 通过执行以下命令来查看测试 pod 是否处于 Running 状态:
 
-```bash
+```sh
 $ kubectl get pod
 NAME                             READY   STATUS    RESTARTS   AGE
 csi-chdfs-pod-6bdcf45f89-lrw82   1/1     Running   0          9s

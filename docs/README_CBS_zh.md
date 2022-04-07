@@ -41,7 +41,7 @@
 ####  使用腾讯云 API Credential 创建 kubernetes secret:
 ***注： 如果是自建集群，必须创建；而如果是TKE集群环境，可以不创建该secret，driver中默认会根据TKE_QCSRole获取临时秘钥。***
 
-```
+```yaml
 #  参考示例 deploy/kubernetes/secret.yaml
 apiVersion: v1
 kind: Secret
@@ -60,7 +60,7 @@ data:
 
 创建attacher,provisioner,plugin需要的rbac：
 
-```
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-rbac.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
@@ -68,7 +68,7 @@ kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 #### 创建controller,node和plugin
 Kubernetes v1.18.x及以上版本创建controller plugin和node plugin
 
-```
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
@@ -76,7 +76,7 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 
 Kubernetes v1.18.x以下版本创建controller plugin和node plugin
 
-```
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
@@ -84,13 +84,13 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 
 #### 简单测试验证
 
-```
-创建storageclass:
-    kubectl apply -f  deploy/examples/storageclass-basic.yaml
-创建pvc:
-    kubectl apply -f  deploy/examples/pvc.yaml
-创建申请pvc的pod:
-    kubectl apply -f  deploy/examples/app.yaml
+```sh
+# 创建storageclass
+kubectl apply -f  deploy/examples/storageclass-basic.yaml
+# 创建pvc
+kubectl apply -f  deploy/examples/pvc.yaml
+# 创建申请pvc的pod
+kubectl apply -f  deploy/examples/app.yaml
 ```
 
 

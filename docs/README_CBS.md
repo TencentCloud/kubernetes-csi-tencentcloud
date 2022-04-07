@@ -54,7 +54,7 @@ data:
 
 ### rbac
 
-```yaml
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-rbac.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ```
@@ -62,7 +62,7 @@ kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 ### controller,node plugin
 Kubernetes version >= v1.18.x
 
-```
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
@@ -70,7 +70,7 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 
 Kubernetes version < v1.18.x
 
-```
+```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
@@ -78,19 +78,19 @@ kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 
 ### examples
 
-```yaml
-storageclass:
-    kubectl apply -f  deploy/cbs/examples/storageclass-basic.yaml
-pvc:
-    kubectl apply -f  deploy/cbs/examples/pvc.yaml
-pod:
-    kubectl apply -f  deploy/cbs/examples/app.yaml
-snapshotclass:
-    kubectl apply -f  deploy/cbs/examples/snapshoter/snapshoterclass.yaml
-snapshot:
-    kubectl apply -f  deploy/cbs/examples/snapshoter/snapshot.yaml
-restore:
-    kubectl apply -f  deploy/cbs/examples/snapshoter/restore.yaml
+```sh
+# storageclass
+kubectl apply -f  deploy/cbs/examples/storageclass-basic.yaml
+# pvc
+kubectl apply -f  deploy/cbs/examples/pvc.yaml
+# pod
+kubectl apply -f  deploy/cbs/examples/app.yaml
+# snapshotclass
+kubectl apply -f  deploy/cbs/examples/snapshoter/snapshoterclass.yaml
+# snapshot
+kubectl apply -f  deploy/cbs/examples/snapshoter/snapshot.yaml
+# restore
+kubectl apply -f  deploy/cbs/examples/snapshoter/restore.yaml
 ```
 
 ## StorageClass parameters
