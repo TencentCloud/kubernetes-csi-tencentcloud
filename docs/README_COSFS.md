@@ -11,7 +11,7 @@ COS CSI plugin can be compiled in a form of a binary file or in a form of a Dock
 
 Building Docker image:
 
-```bash
+```sh
 docker build --network host -t yourimagename -f Dockerfile.cosfs .
 
 # launcher is a component which launch cosfs
@@ -43,50 +43,50 @@ YAML manifests are located in [deploy/cosfs/kubernetes](/deploy/cosfs/kubernetes
 
 **Deploy CSI external components:**
 * If your k8s version >= 1.20
-```bash
-kubectl create -f deploy/cosfs/kubernetes/coscsidriver-new.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/coscsidriver-new.yaml
 ```
 
 * If your k8s version >= 1.14 && < 1.20
-```bash
-kubectl create -f deploy/cosfs/kubernetes/coscsidriver-old.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/coscsidriver-old.yaml
 ```
 
 * If your k8s version < 1.14
-```bash
-kubectl create -f deploy/cosfs/kubernetes/cosattacher.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/cosattacher.yaml
 ```
 
 Deploys stateful sets for external-attacher sidecar containers for COS CSI driver.
 
 **Deploy COS CSI launcher components:**
 * If your k8s version >= 1.18
-```bash
-kubectl create -f deploy/cosfs/kubernetes/coslauncher-new.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/coslauncher-new.yaml
 ```
 
 * If your k8s version < 1.18
-```bash
-kubectl create -f deploy/cosfs/kubernetes/coslauncher-old.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/coslauncher-old.yaml
 ```
 
 **Deploy COS CSI driver and related RBACs:**
 * If your k8s version >= 1.18
-```bash
-kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
-kubectl create -f deploy/cosfs/kubernetes/cosplugin-new.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl apply -f deploy/cosfs/kubernetes/cosplugin-new.yaml
 ```
 
 * If your k8s version >= 1.14 && < 1.18
-```bash
-kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
-kubectl create -f deploy/cosfs/kubernetes/cosplugin-mid.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl apply -f deploy/cosfs/kubernetes/cosplugin-mid.yaml
 ```
 
 * If your k8s version < 1.14
-```bash
-kubectl create -f deploy/cosfs/kubernetes/rbac.yaml
-kubectl create -f deploy/cosfs/kubernetes/cosplugin-old.yaml
+```sh
+kubectl apply -f deploy/cosfs/kubernetes/rbac.yaml
+kubectl apply -f deploy/cosfs/kubernetes/cosplugin-old.yaml
 ```
 
 Deploys a daemon set with two containers: CSI driver-registrar and the COS CSI driver.
@@ -95,7 +95,7 @@ Deploys a daemon set with two containers: CSI driver-registrar and the COS CSI d
 
 After successfully completing the steps above, you should see output similar to this:
 
-```bash
+```sh
 $ kubectl get po -n kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 csi-cosplugin-external-runner-0   2/2       Running   0          1h
@@ -174,7 +174,7 @@ If you want to specify other options for the `cosfs` command, you can store them
 
 Then you should see output similar to this:
 
-```bash
+```sh
 $ kubectl get pv
 NAME      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM     STORAGECLASS   REASON    AGE
 pv-cos    1Gi        RWX            Retain           Available                                      5s
@@ -201,7 +201,7 @@ spec:
 
 Then you should see that the PVC is already bound to the PV:
 
-```bash
+```sh
 $ kubectl get pvc
 NAME      STATUS    VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
 pvc-cos   Bound     pv-cos    1Gi        RWX                           2s
@@ -237,7 +237,7 @@ spec:
 
 The Pod should work properly:
 
-```bash
+```sh
 $ kubectl get po
 NAME      READY     STATUS    RESTARTS   AGE
 pod-cos   1/1       Running   0          1m
