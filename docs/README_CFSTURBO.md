@@ -18,14 +18,21 @@
 
 ### RBAC
 
-```yaml
+```sh
 kubectl apply -f  deploy/cfsturbo/kubernetes/csi-node-rbac.yaml
 ```
 
 ### Node Plugin
 
-```yaml
-kubectl apply -f  deploy/cfsturbo/kubernetes/csidriver.yaml
+**If your k8s version >= 1.20**
+```sh
+kubectl apply -f  deploy/cfsturbo/kubernetes/csidriver-new.yaml
+kubectl apply -f  deploy/cfsturbo/kubernetes/csi-node.yaml
+```
+
+**If your k8s version < 1.20**
+```sh
+kubectl apply -f  deploy/cfsturbo/kubernetes/csidriver-old.yaml
 kubectl apply -f  deploy/cfsturbo/kubernetes/csi-node.yaml
 ```
 
@@ -35,8 +42,8 @@ kubectl apply -f  deploy/cfsturbo/kubernetes/csi-node.yaml
 
 **Note**: `volumeHandle` in PV must be unique, use pv name is better.
 
-```yaml
-kubectl create -f deploy/cfsturbo/examples/static-allinone.yaml
+```sh
+kubectl apply -f deploy/cfsturbo/examples/static-allinone.yaml
 ```
 
 ## PersistentVolume parameters
