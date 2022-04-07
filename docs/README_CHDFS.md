@@ -8,25 +8,35 @@ This plugin is able to mount TencentCloud CHDFS filesystem to workloads. It only
 
 Build chdfs image:
 
-```bash
+```sh
 docker build -t ${imageName} -f build/chdfs/Dockerfile .
 ```
 
-## Deployment with Kubernetes
+## Deploy with Kubernetes
 
 **Requires Kubernetes 1.14+**
 
 **Deploy CHDFS:**
 
-```bash
-kubectl apply -f deploy/chdfs/kubernetes
+**If your k8s version >= 1.20**
+```sh
+kubectl apply -f  deploy/chdfs/kubernetes/csidriver-new.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node-rbac.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node.yaml
 ```
 
-## Verifying the deployment in Kubernetes
+**If your k8s version < 1.20**
+```sh
+kubectl apply -f  deploy/chdfs/kubernetes/csidriver-old.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node-rbac.yaml
+kubectl apply -f  deploy/chdfs/kubernetes/csi-node.yaml
+```
+
+## Verifying
 
 After successfully completing the steps above, you should see output similar to this:
 
-```bash
+```sh
 $ kubectl get po -n kube-system | grep chdfs
 csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 ```
@@ -35,15 +45,15 @@ csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 
 Currently CHDFS CSI Driver only supports static provisioning, so you need to create a PV first:
 
-```bash
-kubectl apply -f deploy/chdfs/example/pv.yaml
+```sh
+kubectl apply -f deploy/chdfs/examples/pv.yaml
 ```
 
 You only need to sepcify the field `url`, which you can find in chdfs's mount point.
 
 Then you should see output similar to this:
 
-```bash
+```sh
 $ kubectl get pv
 NAME           CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM   STORAGECLASS   REASON   AGE
 csi-chdfs-pv   10Gi       RWX            Retain           Available                                  37m
@@ -51,13 +61,13 @@ csi-chdfs-pv   10Gi       RWX            Retain           Available             
 
 Now you can create a PVC to use the PV above:
 
-```bash
-kubectl apply -f deploy/chdfs/example/pvc.yaml
+```sh
+kubectl apply -f deploy/chdfs/examples/pvc.yaml
 ```
 
 Then you would see that the PVC bound to the PV:
 
-```bash
+```sh
 $ kubectl get pvc
 NAME            STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
 csi-chdfs-pvc   Bound    csi-chdfs-pv   10Gi       RWX                           39m
@@ -67,13 +77,13 @@ csi-chdfs-pvc   Bound    csi-chdfs-pv   10Gi       RWX                          
 
 You can create a Pod to use the PVC:
 
-```bash
-kubectl apply -f deploy/chdfs/example/pod.yaml
+```sh
+kubectl apply -f deploy/chdfs/examples/pod.yaml
 ```
 
 The Pod should work properly:
 
-```bash
+```sh
 $ kubectl get pod
 NAME                             READY   STATUS    RESTARTS   AGE
 csi-chdfs-pod-6bdcf45f89-lrw82   1/1     Running   0          9s
