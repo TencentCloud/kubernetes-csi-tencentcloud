@@ -57,6 +57,7 @@ spec:
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
+            - "--component_type=controller"
           env:
             - name: NODE_ID
               valueFrom:
