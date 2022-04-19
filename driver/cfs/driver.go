@@ -107,6 +107,7 @@ func (d *driver) Run() {
 	s := csicommon.NewNonBlockingGRPCServer()
 	var cs *controllerServer
 	var ns *nodeServer
+	glog.Infof("Specify component type: %s", d.componentType)
 	switch d.componentType {
 	    case componentController:
 			cs = NewControllerServer(d)
