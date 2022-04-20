@@ -24,6 +24,7 @@ var (
 	zone     = flag.String("zone", "", "cvm instance region")
 	cfsUrl   = flag.String("cfs_url", "cfs.internal.tencentcloudapi.com", "cfs api domain")
 	nodeID   = flag.String("nodeID", "", "node ID")
+	componentType = flag.String("component_type", "", "component type")
 )
 
 func main() {
@@ -64,7 +65,7 @@ func main() {
 		nodeID = &n
 	}
 
-	drv := cfs.NewDriver(*nodeID, *endpoint, *region, *zone, *cfsUrl)
+	drv := cfs.NewDriver(*nodeID, *endpoint, *region, *zone, *cfsUrl, *componentType)
 
 	drv.Run()
 }

@@ -50,11 +50,12 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.3
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.4
           imagePullPolicy: "Always"
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
+            - "--component_type=node"
           env:
             - name: NODE_ID
               valueFrom:

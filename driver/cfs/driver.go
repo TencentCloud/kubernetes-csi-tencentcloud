@@ -40,14 +40,17 @@ type driver struct {
 	region string
 	zone   string
 	cfsUrl string
+	componentType string
 }
 
 const (
 	DriverName     = "com.tencent.cloud.csi.cfs"
 	DriverVerision = "1.0.0"
+	componentController = "controller"
+	componentNode = "node"
 )
 
-func NewDriver(nodeID, endpoint, region, zone, cfsUrl string) *driver {
+func NewDriver(nodeID, endpoint, region, zone, cfsUrl, componentType string) *driver {
 	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
 
 	d := &driver{}
@@ -56,6 +59,7 @@ func NewDriver(nodeID, endpoint, region, zone, cfsUrl string) *driver {
 	d.cfsUrl = cfsUrl
 	d.region = region
 	d.zone = zone
+	d.componentType = componentType
 
 	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
@@ -101,9 +105,18 @@ func NewControllerServer(d *driver) *controllerServer {
 
 func (d *driver) Run() {
 	s := csicommon.NewNonBlockingGRPCServer()
-	s.Start(d.endpoint,
-		csicommon.NewDefaultIdentityServer(d.csiDriver),
-		NewControllerServer(d),
-		NewNodeServer(d, mount.New("")))
+	var cs *controllerServer
+	var ns *nodeServer
+	glog.Infof("Specify component type: %s", d.componentType)
+	switch d.componentType {
+	    case componentController:
+			cs = NewControllerServer(d)
+	    case componentNode:
+		    ns = NewNodeServer(d, mount.New(""))
+	    default:
+			cs = NewControllerServer(d)
+			ns = NewNodeServer(d, mount.New(""))
+	}
+	s.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), cs, ns)
 	s.Wait()
 }
