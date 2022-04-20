@@ -125,7 +125,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.3
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.4
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"
