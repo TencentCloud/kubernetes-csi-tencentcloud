@@ -270,7 +270,7 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
-	if err := mount.CleanupMountPoint(targetPath, node.mounter, false); err != nil {
+	if err := node.mounter.Unmount(targetPath); err != nil {
 		glog.Errorf("NodeUnpublishVolume: Unmount targetPath %v failed, error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -511,7 +511,7 @@ func findCBSVolume(diskId string) (device string, err error) {
 			}
 
 			glog.Infof("Successfully get device(%s) from serial(/sys/block/vdX/serail), and Symlink %s and %s", deviceFromSerial, deviceFromSerial, p)
-			return p, nil
+			return deviceFromSerial, nil
 		}
 		return "", fmt.Errorf("error getting stat of %q: %v", p, err)
 	}
