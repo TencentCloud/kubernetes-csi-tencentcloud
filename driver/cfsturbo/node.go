@@ -59,7 +59,7 @@ const (
 	// CFSTurboProtoNFS ...
 	CFSTurboProtoNFS = "nfs"
 	// CFSTurboProtoNFSDefaultDIR ...
-	CFSTurboProtoNFSDefaultDIR = "cfs"
+	CFSTurboProtoNFSDefaultDIR = "/cfs"
 	// CFSTurboLustreKernelModule ...
 	CFSTurboLustreKernelModule = "ptlrpc"
 )
@@ -76,6 +76,7 @@ type cfsTurboOptions struct {
 	Path    string `json:"path"`
 	Options string `json:"options"`
 	FSID    string `json:"fsid"`
+	RootDir string `json:"rootdir"`
 }
 
 func (ns *nodeServer) NodeStageVolume(
@@ -88,14 +89,16 @@ func (ns *nodeServer) NodeStageVolume(
 	opt := &cfsTurboOptions{}
 	for key, value := range req.GetVolumeContext() {
 		switch strings.ToLower(key) {
+		case "proto":
+			opt.Proto = value
+		case "rootdir":
+			opt.RootDir = value
+		case "fsid":
+			opt.FSID = value
 		case "host":
 			opt.Server = value
 		case "options":
 			opt.Options = value
-		case "fsid":
-			opt.FSID = value
-		case "proto":
-			opt.Proto = value
 		}
 	}
 
@@ -103,22 +106,32 @@ func (ns *nodeServer) NodeStageVolume(
 	if opt.Proto == "" {
 		opt.Proto = CFSTurboProtoLustre
 	}
+	if opt.RootDir == "" {
+		opt.RootDir = CFSTurboProtoNFSDefaultDIR
+	}
+	if !strings.HasPrefix(opt.RootDir, "/") {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's rootdir format is illegal")
+	}
 	if opt.FSID == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
 	}
 	if opt.Server == "" {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's host should not empty")
 	}
-
 	mo := req.GetVolumeCapability().GetMount().GetMountFlags()
 	if opt.Options != "" {
 		mo = append(mo, opt.Options)
 	}
 
-	if acquired := ns.VolumeLocks.TryAcquire(opt.FSID); !acquired {
-		return nil, status.Errorf(codes.Aborted, util.VolumeOperationAlreadyExistsFmt, opt.FSID)
+	fsidWithRootDir := opt.FSID
+	if opt.RootDir != CFSTurboProtoNFSDefaultDIR {
+		fsidWithRootDir = opt.FSID + strings.ReplaceAll(opt.RootDir, "/", "-")
 	}
-	defer ns.VolumeLocks.Release(opt.FSID)
+
+	if acquired := ns.VolumeLocks.TryAcquire(fsidWithRootDir); !acquired {
+		return nil, status.Errorf(codes.Aborted, util.VolumeOperationAlreadyExistsFmt, fsidWithRootDir)
+	}
+	defer ns.VolumeLocks.Release(fsidWithRootDir)
 
 	var mountSource string
 
@@ -136,7 +149,7 @@ func (ns *nodeServer) NodeStageVolume(
 		// cfs turbo need use nfs v3
 		mo = append(mo, "vers=3,nolock,noresvport")
 		// cfs turbo mount node use fsid
-		mountSource = fmt.Sprintf("%s:/%s/%s", opt.Server, opt.FSID, CFSTurboProtoNFSDefaultDIR)
+		mountSource = fmt.Sprintf("%s:/%s%s", opt.Server, opt.FSID, opt.RootDir)
 
 	case CFSTurboProtoLustre:
 		//check cfs lustre core kmod install
@@ -144,13 +157,13 @@ func (ns *nodeServer) NodeStageVolume(
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
 		}
-		mountSource = fmt.Sprintf("%s@tcp0:/%s/%s", opt.Server, opt.FSID, CFSTurboProtoNFSDefaultDIR)
+		mountSource = fmt.Sprintf("%s@tcp0:/%s%s", opt.Server, opt.FSID, opt.RootDir)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Unsupport protocol type")
 	}
 	glog.Infof("CFS server %s mount option is: %v", mountSource, mo)
 
-	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, opt.FSID)
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsidWithRootDir)
 	glog.Infof("Global mountPath: %v", mountPath)
 
 	//check mountPath
@@ -166,7 +179,7 @@ func (ns *nodeServer) NodeStageVolume(
 		}
 	}
 	if !notMnt {
-		err = AddVolumeIdToCfsturboConfig(opt.FSID, req.GetVolumeId())
+		err = AddVolumeIdToCfsturboConfig(fsidWithRootDir, req.GetVolumeId())
 		if err != nil {
 			glog.Errorf("AddVolumeIdToCfsturboConfig failed, err: %v", err)
 			return nil, status.Error(codes.Internal, err.Error())
@@ -185,7 +198,7 @@ func (ns *nodeServer) NodeStageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = AddVolumeIdToCfsturboConfig(opt.FSID, req.GetVolumeId())
+	err = AddVolumeIdToCfsturboConfig(fsidWithRootDir, req.GetVolumeId())
 	if err != nil {
 		glog.Errorf("AddVolumeIdToCfsturboConfig failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -200,38 +213,38 @@ func (ns *nodeServer) NodeUnstageVolume(
 	*csi.NodeUnstageVolumeResponse, error) {
 	glog.Infof("NodeUnstageVolume NodeUnstageVolumeRequest is: %v", req)
 
-	fsid, err := GetFSIDByVolumeId(req.GetVolumeId())
+	fsidWithRootDir, err := GetFSIDWithRootDirByVolumeId(req.GetVolumeId())
 	if err != nil {
-		glog.Errorf("Get fsid from cfsturboConfigName failed, err: %v", err)
+		glog.Errorf("Get fsidWithRootDir from cfsturboConfigName failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if fsid == "" {
-		glog.Warningf("FSID is empty, skip node unstage")
+	if fsidWithRootDir == "" {
+		glog.Warningf("FSIDWithRootDir is empty, skip node unstage")
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
-	if acquired := ns.VolumeLocks.TryAcquire(fsid); !acquired {
-		return nil, status.Errorf(codes.Aborted, util.VolumeOperationAlreadyExistsFmt, fsid)
+	if acquired := ns.VolumeLocks.TryAcquire(fsidWithRootDir); !acquired {
+		return nil, status.Errorf(codes.Aborted, util.VolumeOperationAlreadyExistsFmt, fsidWithRootDir)
 	}
-	defer ns.VolumeLocks.Release(fsid)
+	defer ns.VolumeLocks.Release(fsidWithRootDir)
 
-	needUmount, err := DeleteVolumeIdFromCfsturboConfig(req.GetVolumeId(), fsid)
+	needUmount, err := DeleteVolumeIdFromCfsturboConfig(req.GetVolumeId(), fsidWithRootDir)
 	if err != nil {
 		glog.Errorf("DeleteVolumeIdFromCfsturboConfig failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if !needUmount {
-		glog.Infof("FSID %s is still in use, skip node unstage", fsid)
+		glog.Infof("FSIDWithRootDir %s is still in use, skip node unstage", fsidWithRootDir)
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
-	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsidWithRootDir)
 	err = mount.CleanupMountPoint(mountPath, ns.mounter, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = DeleteCfsturboConfig(fsid)
+	err = DeleteCfsturboConfig(fsidWithRootDir)
 	if err != nil {
 		glog.Errorf("DeleteCfsturboConfig failed, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -251,24 +264,29 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	opt := &cfsTurboOptions{}
 	for key, value := range req.GetVolumeContext() {
 		switch strings.ToLower(key) {
-		case "path":
-			opt.Path = value
 		case "proto":
 			opt.Proto = value
+		case "rootdir":
+			opt.RootDir = value
 		case "fsid":
 			opt.FSID = value
+		case "path":
+			opt.Path = value
 		}
-	}
-	mo := req.VolumeCapability.GetMount().MountFlags
-	mo = append(mo, "bind")
-
-	if req.Readonly {
-		mo = append(mo, "ro")
 	}
 
 	// check protocol first
 	if opt.Proto == "" {
 		opt.Proto = CFSTurboProtoLustre
+	}
+	if opt.RootDir == "" {
+		opt.RootDir = CFSTurboProtoNFSDefaultDIR
+	}
+	if !strings.HasPrefix(opt.RootDir, "/") {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's rootdir format is illegal")
+	}
+	if opt.FSID == "" {
+		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
 	}
 	//check path
 	if opt.Path == "" {
@@ -277,17 +295,24 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if !strings.HasPrefix(opt.Path, "/") {
 		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's path prefix must be /")
 	}
-	if opt.FSID == "" {
-		return nil, status.Error(codes.InvalidArgument, "volumeAttributes's fsid should not empty")
+	mo := req.VolumeCapability.GetMount().MountFlags
+	mo = append(mo, "bind")
+	if req.Readonly {
+		mo = append(mo, "ro")
 	}
 
-	if err := ns.CheckGlobalMountPath(opt.FSID, ctx, req); err != nil {
+	fsidWithRootDir := opt.FSID
+	if opt.RootDir != CFSTurboProtoNFSDefaultDIR {
+		fsidWithRootDir = opt.FSID + strings.ReplaceAll(opt.RootDir, "/", "-")
+	}
+
+	if err := ns.CheckGlobalMountPath(fsidWithRootDir, ctx, req); err != nil {
 		glog.Errorf("NodePublishVolume: CheckGlobalMountPath failed, error: %v", err)
 		return nil, err
 	}
 
 	// get global mount sub directory bind mount
-	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, opt.FSID, opt.Path)
+	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, fsidWithRootDir, opt.Path)
 
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
@@ -354,8 +379,8 @@ func (ns *nodeServer) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeReq
 	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not implemented yet")
 }
 
-func (ns *nodeServer) CheckGlobalMountPath(fsid string, ctx context.Context, req *csi.NodePublishVolumeRequest) error {
-	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsid)
+func (ns *nodeServer) CheckGlobalMountPath(fsidWithRootDir string, ctx context.Context, req *csi.NodePublishVolumeRequest) error {
+	mountPath := fmt.Sprintf("%s/%s", cfsturboGlobalPath, fsidWithRootDir)
 
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mountPath)
 	if err != nil {
@@ -370,7 +395,7 @@ func (ns *nodeServer) CheckGlobalMountPath(fsid string, ctx context.Context, req
 	}
 
 	if notMnt {
-		glog.Infof("Call NodeStageVolume to provide the global mountPath of %s", fsid)
+		glog.Infof("Call NodeStageVolume to provide the global mountPath of %s", fsidWithRootDir)
 		stageReq := &csi.NodeStageVolumeRequest{
 			VolumeId:         req.GetVolumeId(),
 			VolumeCapability: req.GetVolumeCapability(),
