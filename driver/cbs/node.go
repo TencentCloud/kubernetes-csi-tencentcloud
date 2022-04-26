@@ -252,7 +252,7 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	targetPath := req.TargetPath
 
 	if err := node.cleanIntreePath(targetPath, req.VolumeId); err != nil {
-		glog.Errorf("NodeUnpublishVolume: cleanIntreePath failed, error %v", targetPath, err)
+		glog.Errorf("NodeUnpublishVolume: cleanIntreePath failed, error %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 

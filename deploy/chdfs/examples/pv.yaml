@@ -22,3 +22,4 @@ spec:
       url: "*.chdfs.ap-*.myqcloud.com"
       # Additional args.
       additional_args: ""
+  storageClassName: ""
