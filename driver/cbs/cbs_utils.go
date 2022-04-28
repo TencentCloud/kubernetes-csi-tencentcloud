@@ -2,13 +2,15 @@ package cbs
 
 import (
 	"fmt"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"strings"
+	"sync"
+
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
-	"strings"
-	"sync"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 type cbsSnapshot struct {
