@@ -7,8 +7,8 @@ import (
 
 type cbsIdentity struct{}
 
-func newCbsIdentity() (*cbsIdentity, error) {
-	return &cbsIdentity{}, nil
+func newCbsIdentity() *cbsIdentity {
+	return &cbsIdentity{}
 }
 
 func (identity *cbsIdentity) GetPluginInfo(context.Context, *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {

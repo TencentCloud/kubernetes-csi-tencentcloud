@@ -8,21 +8,24 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
-	"github.com/golang/glog"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/kubernetes/pkg/util/resizefs"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/utils/exec"
 	"k8s.io/utils/mount"
+
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
+	"github.com/golang/glog"
+	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
+
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -39,15 +42,18 @@ var (
 )
 
 type cbsNode struct {
-	metadataClient    *metadata.MetaData
-	cbsClient         *cbs.Client
-	mounter           mount.SafeFormatAndMount
-	idempotent        *util.Idempotent
+	metadataClient *metadata.MetaData
+	cbsClient      *cbs.Client
+	mounter        mount.SafeFormatAndMount
+	idempotent     *util.Idempotent
+
+	zone              string
+	nodeID            string
 	volumeAttachLimit int64
 }
 
 // TODO  node plugin need idempotent and should use inflight
-func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
+func newCbsNode(drv *Driver) *cbsNode {
 	secretID, secretKey, token, _ := util.GetSercet()
 	cred := &common.Credential{
 		SecretId:  secretID,
@@ -55,12 +61,9 @@ func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
 		Token:     token,
 	}
 
-	client, err := cbs.NewClient(cred, region, profile.NewClientProfile())
-	if err != nil {
-		return nil, err
-	}
+	client, _ := cbs.NewClient(cred, drv.region, profile.NewClientProfile())
 
-	node := cbsNode{
+	return &cbsNode{
 		metadataClient: metadata.NewMetaData(http.DefaultClient),
 		cbsClient:      client,
 		mounter: mount.SafeFormatAndMount{
@@ -68,9 +71,10 @@ func newCbsNode(region string, volumeAttachLimit int64) (*cbsNode, error) {
 			Exec:      exec.New(),
 		},
 		idempotent:        util.NewIdempotent(),
-		volumeAttachLimit: volumeAttachLimit,
+		zone:              drv.zone,
+		nodeID:            drv.nodeID,
+		volumeAttachLimit: drv.volumeAttachLimit,
 	}
-	return &node, nil
 }
 
 func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -295,26 +299,14 @@ func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 }
 
 func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	nodeID, err := util.GetFromMetadata(node.metadataClient, metadata.INSTANCE_ID)
-	if err != nil {
-		glog.Errorf("NodeGetInfo node.metadataClient.InstanceID() error: %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	zone, err := util.GetFromMetadata(node.metadataClient, metadata.ZONE)
-	if err != nil {
-		glog.Errorf("NodeGetInfo node.metadataClient.Zone() error: %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	return &csi.NodeGetInfoResponse{
-		NodeId:            nodeID,
+		NodeId:            node.nodeID,
 		MaxVolumesPerNode: node.getMaxAttachVolumePerNode(),
 
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				TopologyZoneKey: zone,
+				TopologyZoneKey: node.zone,
 			},
 		},
 	}, nil

@@ -1,84 +1,84 @@
 package cbs
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"time"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/golang/glog"
+	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/tags"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-	"google.golang.org/grpc"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
-	DriverName      = "com.tencent.cloud.csi.cbs"
-	DriverVerision  = "1.0.0"
-	TopologyZoneKey = "topology." + DriverName + "/zone"
+	DriverName          = "com.tencent.cloud.csi.cbs"
+	DriverVerision      = "1.0.0"
+	TopologyZoneKey     = "topology." + DriverName + "/zone"
+	componentController = "controller"
+	componentNode       = "node"
 )
 
 type Driver struct {
-	region string
-	zone   string
+	client        kubernetes.Interface
+	metadataStore util.CachePersister
+
+	endpoint string
+	region   string
+	zone     string
+	nodeID   string
+	cbsUrl   string
 	// TKE cluster ID
 	clusterId         string
+	componentType     string
 	volumeAttachLimit int64
-	// kube client
-	client kubernetes.Interface
 }
 
-func NewDriver(region, zone, clusterId string, volumeAttachLimit int64, client kubernetes.Interface) (*Driver, error) {
-	driver := Driver{
-		zone:              zone,
-		region:            region,
-		clusterId:         clusterId,
-		volumeAttachLimit: volumeAttachLimit,
+func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType string, volumeAttachLimit int64, client kubernetes.Interface) *Driver {
+	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
+
+	return &Driver{
 		client:            client,
+		metadataStore:     util.NewCachePersister(),
+		endpoint:          endpoint,
+		region:            region,
+		zone:              zone,
+		nodeID:            nodeID,
+		cbsUrl:            cbsUrl,
+		clusterId:         clusterId,
+		componentType:     componentType,
+		volumeAttachLimit: volumeAttachLimit,
 	}
-
-	return &driver, nil
 }
 
-func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.CachePersister, enableMetricsServer bool, timeInterval int, metricPort int64) error {
-	controller, err := newCbsController(drv.region, drv.zone, cbsUrl, drv.clusterId, cachePersister)
-	if err != nil {
-		return err
+func (drv *Driver) Run(enableMetricsServer bool, timeInterval int, metricPort int64) {
+	s := csicommon.NewNonBlockingGRPCServer()
+	var cs *cbsController
+	var ns *cbsNode
+
+	glog.Infof("Specify component type: %s", drv.componentType)
+	switch drv.componentType {
+	case componentController:
+		cs = newCbsController(drv)
+	case componentNode:
+		ns = newCbsNode(drv)
+	default:
+		cs = newCbsController(drv)
+		ns = newCbsNode(drv)
 	}
 
-	if err := controller.LoadExDataFromMetadataStore(); err != nil {
-		glog.Fatalf("failed to load metadata from store, err %v\n", err)
-	}
-
-	identity, err := newCbsIdentity()
-	if err != nil {
-		return err
-	}
-
-	node, err := newCbsNode(drv.region, drv.volumeAttachLimit)
-	if err != nil {
-		return err
-	}
-
-	logGRPC := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		glog.Infof("GRPC call: %s, request: %+v", info.FullMethod, req)
-		resp, err := handler(ctx, req)
-		if err != nil {
-			glog.Errorf("GRPC error: %v", err)
-		} else {
-			glog.Infof("GRPC error: %v, response: %+v", err, resp)
+	if cs != nil {
+		if err := cs.LoadExDataFromMetadataStore(); err != nil {
+			glog.Fatalf("failed to load metadata from store, err %v\n", err)
 		}
-		return resp, err
 	}
 
 	if enableMetricsServer {
@@ -95,46 +95,19 @@ func (drv *Driver) Run(endpoint *url.URL, cbsUrl string, cachePersister util.Cac
 		}, 5*time.Second)
 	}
 
-	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(logGRPC),
-	}
-
-	srv := grpc.NewServer(opts...)
-
-	csi.RegisterControllerServer(srv, controller)
-	csi.RegisterIdentityServer(srv, identity)
-	csi.RegisterNodeServer(srv, node)
-
-	if endpoint.Scheme == "unix" {
-		sockPath := path.Join(endpoint.Host, endpoint.Path)
-		if _, err := os.Stat(sockPath); err != nil {
-			if !os.IsNotExist(err) {
-				return err
-			}
-		} else {
-			if err := os.Remove(sockPath); err != nil {
-				return err
-			}
-		}
-	}
-
 	// Sync the tags of cluster and disks
-	if os.Getenv("ADDRESS") != "" {
+	if drv.componentType == componentController || os.Getenv("ADDRESS") != "" {
 		go func() {
 			for {
 				rand.Seed(time.Now().UnixNano())
 				n := rand.Intn(timeInterval)
 				glog.Infof("Begin to sync the tags of cluster and disks after sleeping %d minutes...\n", n)
 				time.Sleep(time.Duration(n) * time.Minute)
-				tags.UpdateDisksTags(drv.client, controller.cbsClient, controller.cvmClient, controller.tagClient, drv.region, drv.clusterId)
+				tags.UpdateDisksTags(drv.client, cs.cbsClient, cs.cvmClient, cs.tagClient, drv.region, drv.clusterId)
 			}
 		}()
 	}
 
-	listener, err := net.Listen(endpoint.Scheme, path.Join(endpoint.Host, endpoint.Path))
-	if err != nil {
-		return err
-	}
-
-	return srv.Serve(listener)
+	s.Start(drv.endpoint, newCbsIdentity(), cs, ns)
+	s.Wait()
 }

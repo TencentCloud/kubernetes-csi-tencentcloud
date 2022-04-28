@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -108,13 +108,14 @@ type cbsController struct {
 	cbsClient     *cbs.Client
 	cvmClient     *cvm.Client
 	tagClient     *tag.Client
-	zone          string
-	region        string
-	clusterId     string
 	metadataStore util.CachePersister
+
+	zone      string
+	region    string
+	clusterId string
 }
 
-func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister util.CachePersister) (*cbsController, error) {
+func newCbsController(drv *Driver) *cbsController {
 	secretID, secretKey, token, _ := util.GetSercet()
 	cred := &common.Credential{
 		SecretId:  secretID,
@@ -123,36 +124,27 @@ func newCbsController(region, zone, cbsUrl, clusterId string, cachePersister uti
 	}
 
 	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = cbsUrl
-	client, err := cbs.NewClient(cred, region, cpf)
-	if err != nil {
-		return nil, err
-	}
+	cpf.HttpProfile.Endpoint = drv.cbsUrl
+	client, _ := cbs.NewClient(cred, drv.region, cpf)
+
 	cvmcpf := profile.NewClientProfile()
-	//cvmcpf.HttpProfile.Endpoint = "cvm.tencentcloudapi.com"
 	cvmcpf.HttpProfile.Endpoint = "cvm.internal.tencentcloudapi.com"
-	cvmClient, err := cvm.NewClient(cred, region, cvmcpf)
-	if err != nil {
-		return nil, err
-	}
+	cvmClient, _ := cvm.NewClient(cred, drv.region, cvmcpf)
 
 	tagCpf := profile.NewClientProfile()
 	tagCpf.Language = "en-US"
 	tagCpf.HttpProfile.Endpoint = "tag.internal.tencentcloudapi.com"
-	tagClient, err := tag.NewClient(cred, region, tagCpf)
-	if err != nil {
-		return nil, err
-	}
+	tagClient, _ := tag.NewClient(cred, drv.region, tagCpf)
 
 	return &cbsController{
 		cbsClient:     client,
 		cvmClient:     cvmClient,
 		tagClient:     tagClient,
-		zone:          zone,
-		region:        region,
-		clusterId:     clusterId,
-		metadataStore: cachePersister,
-	}, nil
+		zone:          drv.zone,
+		region:        drv.region,
+		clusterId:     drv.clusterId,
+		metadataStore: drv.metadataStore,
+	}
 }
 
 func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
