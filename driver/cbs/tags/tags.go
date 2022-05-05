@@ -3,19 +3,20 @@ package tags
 import (
 	"context"
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/golang/glog"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 )
 
 const (

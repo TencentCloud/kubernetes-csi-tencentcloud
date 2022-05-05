@@ -125,7 +125,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.4
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.5
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"
@@ -133,6 +133,7 @@ spec:
             - "--v=5"
             - "--logtostderr=true"
             - "--endpoint=$(ADDRESS)"
+            - "--component_type=controller"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
