@@ -2,12 +2,9 @@ package main
 
 import (
 	"flag"
-	"net/http"
-
-	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
+	
 	"github.com/golang/glog"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/chdfs"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 var (
@@ -18,20 +15,11 @@ var (
 
 func main() {
 	flag.Parse()
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
 
 	if *nodeID == "" {
-		n, err := util.GetFromMetadata(metadataClient, metadata.INSTANCE_ID)
-		if err != nil {
-			glog.Fatal(err)
-		}
-		nodeID = &n
+		glog.Fatal("nodeID is empty")
 	}
 
-	driver, err := chdfs.NewDriver(*driverName, *nodeID)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	driver.Start(*endpoint)
+	driver := chdfs.NewDriver(*endpoint, *driverName, *nodeID)
+	driver.Start()
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 
 	"github.com/golang/glog"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cfsturbo"
@@ -18,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	if *nodeID == "" {
-		glog.Fatal(fmt.Errorf("nodeID is empty"))
+		glog.Fatal("nodeID is empty")
 	}
 
 	drv := cfsturbo.NewDriver(*nodeID, *endpoint)
