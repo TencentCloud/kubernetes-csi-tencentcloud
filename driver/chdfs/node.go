@@ -14,13 +14,6 @@ import (
 	"k8s.io/utils/mount"
 )
 
-func newNodeServer(driver *csicommon.CSIDriver) csi.NodeServer {
-	return &nodeServer{
-		DefaultNodeServer: csicommon.NewDefaultNodeServer(driver),
-		mounter:           mount.New(""),
-	}
-}
-
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
 	mounter mount.Interface
