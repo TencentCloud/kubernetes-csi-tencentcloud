@@ -17,10 +17,6 @@ spec:
       serviceAccount: cfsturbo-csi-node-sa
       hostNetwork: true
       priorityClassName: system-node-critical
-      hostAliases:
-        - ip: "169.254.0.23"
-          hostnames:
-            - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
           image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v1.2.0

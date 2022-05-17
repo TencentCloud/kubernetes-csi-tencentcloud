@@ -27,33 +27,25 @@ import (
 type driver struct {
 	csiDriver *csicommon.CSIDriver
 	endpoint  string
-
-	ids *csicommon.DefaultIdentityServer
-	ns  *nodeServer
-
-	cap   []*csi.VolumeCapability_AccessMode
-	cscap []*csi.ControllerServiceCapability
 }
 
 const (
-	DriverName     = "com.tencent.cloud.csi.cfsturbo"
-	DriverVerision = "v1.2.2"
+	DriverName    = "com.tencent.cloud.csi.cfsturbo"
+	DriverVersion = "v1.2.2"
 )
 
 func NewDriver(nodeID, endpoint string) *driver {
-	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
+	glog.Infof("Driver: %v version: %v", DriverName, DriverVersion)
 
-	d := &driver{}
-	d.endpoint = endpoint
-
-	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, nodeID)
+	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVersion, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
 
-	d.csiDriver = csiDriver
-
-	return d
+	return &driver{
+		endpoint:  endpoint,
+		csiDriver: csiDriver,
+	}
 }
 
 func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
@@ -64,17 +56,9 @@ func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
 	}
 }
 
-func NewControllerServer(d *driver) *controllerServer {
-	return &controllerServer{
-		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
-	}
-}
-
 func (d *driver) Run() {
 	s := csicommon.NewNonBlockingGRPCServer()
-	s.Start(d.endpoint,
-		csicommon.NewDefaultIdentityServer(d.csiDriver),
-		NewControllerServer(d),
+	s.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), nil,
 		NewNodeServer(d, mount.New("")))
 	s.Wait()
 }
