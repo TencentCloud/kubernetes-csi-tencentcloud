@@ -16,10 +16,6 @@ spec:
       priorityClassName: system-node-critical
       hostNetwork: true
       hostPID: true
-      hostAliases:
-        - ip: "169.254.0.23"
-          hostnames:
-            - "metadata.tencentyun.com"
       containers:
         - name: driver-registrar
           image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v2.0.1
@@ -53,8 +49,13 @@ spec:
           args:
             - "--v=5"
             - "--logtostderr=true"
+            - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
           env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: CSI_ENDPOINT
               value: unix://plugin/csi.sock
           volumeMounts:

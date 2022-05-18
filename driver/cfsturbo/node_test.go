@@ -29,7 +29,7 @@ func newFakeSafeFormatAndMounter(fakeMounter *mount.FakeMounter) *mount.SafeForm
 }
 
 func newFakeCFSTurboNode(sfm *mount.SafeFormatAndMount) *nodeServer {
-	fakeDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, "fakenode")
+	fakeDriver := csicommon.NewCSIDriver(DriverName, DriverVersion, "fakenode")
 	fakeDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
