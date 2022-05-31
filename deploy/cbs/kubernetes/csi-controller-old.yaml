@@ -25,6 +25,9 @@ spec:
             - "cbs.internal.tencentcloudapi.com"
             - "cvm.internal.tencentcloudapi.com"
             - "tag.internal.tencentcloudapi.com"
+            - "cbs.test.tencentcloudapi.com"
+            - "cvm.test.tencentcloudapi.com"
+            - "tag.test.tencentcloudapi.com"
       containers:
         - name: csi-provisioner
           image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v1.6.0
@@ -58,6 +61,7 @@ spec:
             - "--v=5"
             - "--leader-election=true"
             - "--metrics-address=:9091"
+            - "--worker-threads=50"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -125,7 +129,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.5
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.6
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"

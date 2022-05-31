@@ -78,9 +78,7 @@ github.com/prometheus/procfs/internal/fs
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
 # github.com/tencentcloud/tencentcloud-sdk-go v1.0.122
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/chdfs/v20190718
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors
 github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http

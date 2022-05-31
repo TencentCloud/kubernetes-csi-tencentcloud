@@ -11,10 +11,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/golang/glog"
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
 
+	cbs "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/v20170312"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 )
