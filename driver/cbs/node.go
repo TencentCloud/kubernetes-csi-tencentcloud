@@ -3,11 +3,14 @@ package cbs
 import (
 	"fmt"
 	"io/ioutil"
-	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/util/resizefs"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/utils/exec"
@@ -18,22 +21,19 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
-var (
+const (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
 
 	defaultMaxAttachVolumePerNode = 18
+)
 
+var (
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 		csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
@@ -42,30 +42,25 @@ var (
 )
 
 type cbsNode struct {
-	metadataClient *metadata.MetaData
-	cbsClient      *cbs.Client
-	mounter        mount.SafeFormatAndMount
-	idempotent     *util.Idempotent
+	mounter    mount.SafeFormatAndMount
+	idempotent *util.Idempotent
 
 	zone              string
 	nodeID            string
 	volumeAttachLimit int64
 }
 
-// TODO  node plugin need idempotent and should use inflight
 func newCbsNode(drv *Driver) *cbsNode {
-	secretID, secretKey, token, _ := util.GetSercet()
-	cred := &common.Credential{
-		SecretId:  secretID,
-		SecretKey: secretKey,
-		Token:     token,
+	if drv.nodeID == "" {
+		nodeID := getInstanceIdFromProviderID(drv.client)
+		if nodeID == "" {
+			glog.Fatal("get instanceID from node failed")
+		}
+		glog.Infof("instanceID: %s", nodeID)
+		drv.nodeID = nodeID
 	}
 
-	client, _ := cbs.NewClient(cred, drv.region, profile.NewClientProfile())
-
 	return &cbsNode{
-		metadataClient: metadata.NewMetaData(http.DefaultClient),
-		cbsClient:      client,
 		mounter: mount.SafeFormatAndMount{
 			Interface: mount.New(""),
 			Exec:      exec.New(),
@@ -145,6 +140,13 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 			"NodeStageVolume: FormatAndMount error diskSource %v stagingTargetPath %v, error %v",
 			diskSource, stagingTargetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if strings.HasPrefix(node.nodeID, CXMNodeIDPrefix) {
+		r := resizefs.NewResizeFs(&node.mounter)
+		if _, err := r.Resize(diskSource, stagingTargetPath); err != nil {
+			return nil, status.Errorf(codes.Internal, "NodeStageVolume: could not resize cxm volume %q (%q):  %v", diskSource, stagingTargetPath, err)
+		}
 	}
 
 	return &csi.NodeStageVolumeResponse{}, nil
@@ -482,6 +484,61 @@ func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
 	}
 
 	return int64(defaultMaxAttachVolumePerNode)
+}
+
+func getInstanceIdFromProviderID(client kubernetes.Interface) string {
+	nodeName := os.Getenv("NODE_ID")
+	providerID := getProviderIDFromNode(client, nodeName)
+	u, err := url.Parse(providerID)
+	if err != nil {
+		glog.Errorf("parse the providerID %s in node %s failed, err: %v", providerID, nodeName, err)
+		return ""
+	}
+
+	switch u.Scheme {
+	case "qcloud":
+		tokens := strings.Split(strings.Trim(u.Path, "/"), "/")
+		instanceId := tokens[len(tokens)-1]
+		if instanceId == "" || strings.Contains(instanceId, "/") || !strings.HasPrefix(instanceId, "ins-") {
+			glog.Errorf("invalid format for qcloud instance (%s)", providerID)
+			return ""
+		}
+		return instanceId
+	case "tencentcloud":
+		if u.Host == "" || !strings.HasPrefix(u.Host, "eks-") {
+			glog.Errorf("invalid format for tencentcloud instance (%s)", providerID)
+			return ""
+		}
+		return u.Host
+	default:
+		glog.Errorf("not support providerID %s in node %s", providerID, nodeName)
+		return ""
+	}
+}
+
+func getProviderIDFromNode(client kubernetes.Interface, nodeName string) string {
+	ctx := context.Background()
+	ticker := time.NewTicker(time.Second * 2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	defer cancel()
+
+	for {
+		select {
+		case <-ticker.C:
+			node, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+			if err != nil {
+				glog.Errorf("get node %s failed, err: %v", nodeName, err)
+				continue
+			}
+			if node.Spec.ProviderID == "" {
+				glog.Errorf("the providerID in node %s is empty", nodeName)
+				continue
+			}
+			return node.Spec.ProviderID
+		case <-ctx.Done():
+			glog.Fatalf("get providerID from node %s failed before deadline exceeded", nodeName)
+		}
+	}
 }
 
 func findCBSVolume(diskId string) (device string, err error) {

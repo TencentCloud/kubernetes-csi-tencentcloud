@@ -63,7 +63,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.5
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v1.2.6
           command:
             - "/csi-tencentcloud-cbs"
           args:
@@ -72,6 +72,10 @@ spec:
             - "--endpoint=unix:///csi/csi.sock"
             - "--component_type=node"
           env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: TENCENTCLOUD_API_SECRET_ID
               valueFrom:
                 secretKeyRef:
@@ -131,3 +135,7 @@ spec:
         - name: lib-modules
           hostPath:
             path: /lib/modules
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+    type: RollingUpdate
