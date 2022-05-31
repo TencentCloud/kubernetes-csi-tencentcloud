@@ -15,17 +15,17 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	cbs "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs/v20170312"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
 
+	cbs "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/v20170312"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
-var (
+const (
 	GB uint64 = 1 << (10 * 3)
 
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
@@ -46,8 +46,7 @@ var (
 	// cbs disk charge prepaid options
 	DiskChargePrepaidPeriodAttr = "diskChargeTypePrepaidPeriod"
 
-	DiskChargePrepaidPeriodValidValues = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36}
-	DiskChargePrepaidPeriodDefault     = 1
+	DiskChargePrepaidPeriodDefault = 1
 
 	DiskChargePrepaidRenewFlagNotifyAndAutoRenew          = "NOTIFY_AND_AUTO_RENEW"
 	DiskChargePrepaidRenewFlagNotifyAndManualRenewd       = "NOTIFY_AND_MANUAL_RENEW"
@@ -55,14 +54,10 @@ var (
 
 	DiskChargePrepaidRenewFlagDefault = DiskChargePrepaidRenewFlagNotifyAndManualRenewd
 
-	// cbs disk encrypt
-	EncryptAttr   = "encrypt"
-	EncryptEnable = "ENCRYPT"
-
-	//cbs disk zone
+	// cbs disk zone
 	DiskZone = "diskZone"
 
-	//cbs disk zones
+	// cbs disk zones
 	DiskZones = "diskZones"
 
 	TKESERVICETYPE    = "ccs"
@@ -75,6 +70,29 @@ var (
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
 	StatusExpanding  = "EXPANDING"
+
+	SnapshotNormal = "NORMAL"
+
+	CVMNodeIDPrefix = "ins-"
+	CXMNodeIDPrefix = "eks-"
+	NodeIDLength    = 12
+
+	CbsUrl     = "cbs.internal.tencentcloudapi.com"
+	CvmUrl     = "cvm.internal.tencentcloudapi.com"
+	TagUrl     = "tag.internal.tencentcloudapi.com"
+	CbsTestUrl = "cbs.test.tencentcloudapi.com"
+	CvmTestUrl = "cvm.test.tencentcloudapi.com"
+	TagTestUrl = "tag.test.tencentcloudapi.com"
+)
+
+var (
+	// cbs disk encrypt
+	EncryptAttr   = "encrypt"
+	EncryptEnable = "ENCRYPT"
+
+	CXMInstanceType = "eks"
+
+	DiskChargePrepaidPeriodValidValues = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36}
 
 	// volumeCaps represents how the volume could be accessed.
 	// It is SINGLE_NODE_WRITER since EBS volume could only be
@@ -93,15 +111,10 @@ var (
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 	}
 
-	SnapshotNormal = "NORMAL"
-
 	cbsSnapshotsMapsCache = &cbsSnapshotsCache{
 		mux:             &sync.Mutex{},
 		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
 	}
-
-	CVMNodeIDPrefix = "ins-"
-	CVMNodeIDLength = 12
 )
 
 type cbsController struct {
@@ -124,16 +137,27 @@ func newCbsController(drv *Driver) *cbsController {
 	}
 
 	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = drv.cbsUrl
-	client, _ := cbs.NewClient(cred, drv.region, cpf)
+	cpf.HttpProfile.Endpoint = CbsUrl
 
 	cvmcpf := profile.NewClientProfile()
-	cvmcpf.HttpProfile.Endpoint = "cvm.internal.tencentcloudapi.com"
-	cvmClient, _ := cvm.NewClient(cred, drv.region, cvmcpf)
+	cvmcpf.HttpProfile.Endpoint = CvmUrl
 
 	tagCpf := profile.NewClientProfile()
 	tagCpf.Language = "en-US"
-	tagCpf.HttpProfile.Endpoint = "tag.internal.tencentcloudapi.com"
+	tagCpf.HttpProfile.Endpoint = TagUrl
+
+	if drv.environmentType == "test" {
+		cpf.HttpProfile.Endpoint = CbsTestUrl
+		cvmcpf.HttpProfile.Endpoint = CvmTestUrl
+		tagCpf.HttpProfile.Endpoint = TagTestUrl
+	}
+
+	if drv.cbsUrl != "" {
+		cpf.HttpProfile.Endpoint = drv.cbsUrl
+	}
+
+	client, _ := cbs.NewClient(cred, drv.region, cpf)
+	cvmClient, _ := cvm.NewClient(cred, drv.region, cvmcpf)
 	tagClient, _ := tag.NewClient(cred, drv.region, tagCpf)
 
 	return &cbsController{
@@ -554,8 +578,8 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	diskId := req.VolumeId
 	instanceId := req.NodeId
 
-	if !(strings.HasPrefix(instanceId, CVMNodeIDPrefix) && len(instanceId) == CVMNodeIDLength) {
-		glog.Infof("ControllerPublishVolume: attach disk %s to node %s, but the node is eklet, skip attach in controller.", diskId, instanceId)
+	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
+		glog.Infof("ControllerPublishVolume: attach disk %s to node %s, but the node's instanceType is unsupported.", diskId, instanceId)
 		return &csi.ControllerPublishVolumeResponse{}, nil
 	}
 	listCbsRequest := cbs.NewDescribeDisksRequest()
@@ -591,6 +615,9 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	attachDiskRequest := cbs.NewAttachDisksRequest()
 	attachDiskRequest.DiskIds = []*string{&diskId}
 	attachDiskRequest.InstanceId = &instanceId
+	if strings.HasPrefix(instanceId, CXMNodeIDPrefix) {
+		attachDiskRequest.InstanceType = &CXMInstanceType
+	}
 	sTimeForAttachDisks := time.Now()
 	_, err = ctrl.cbsClient.AttachDisks(attachDiskRequest)
 	if err != nil {
@@ -647,8 +674,8 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	diskId := req.VolumeId
 
 	instanceId := req.NodeId
-	if !(strings.HasPrefix(instanceId, CVMNodeIDPrefix) && len(instanceId) == CVMNodeIDLength) {
-		glog.Infof("ControllerUnpublishVolume: detach disk %s from node %s, but the node is eklet, skip attach in controller.", diskId, instanceId)
+	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
+		glog.Infof("ControllerUnpublishVolume: detach disk %s from node %s, but the node's instanceType is unsupported.", diskId, instanceId)
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 	listCbsRequest := cbs.NewDescribeDisksRequest()
@@ -680,6 +707,9 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	detachDiskRequest := cbs.NewDetachDisksRequest()
 	detachDiskRequest.DiskIds = []*string{&diskId}
+	if strings.HasPrefix(instanceId, CXMNodeIDPrefix) {
+		detachDiskRequest.InstanceType = &CXMInstanceType
+	}
 	sTimeForDetachDisks := time.Now()
 	_, err = ctrl.cbsClient.DetachDisks(detachDiskRequest)
 	if err != nil {

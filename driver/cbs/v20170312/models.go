@@ -80,6 +80,9 @@ type AttachDisksRequest struct {
 
 	// 可选参数，不传该参数则仅执行挂载操作。传入`True`时，会在挂载成功后将云硬盘设置为随云主机销毁模式，仅对按量计费云硬盘有效。
 	DeleteWithInstance *bool `json:"DeleteWithInstance,omitempty" name:"DeleteWithInstance"`
+
+	// 测试，用于指定CXM类型
+	InstanceType *string `json:"InstanceType,omitempty" name:"InstanceType"`
 }
 
 func (r *AttachDisksRequest) ToJsonString() string {
@@ -856,6 +859,9 @@ type DetachDisksRequest struct {
 
 	// 对于非共享型云盘，会忽略该参数；对于共享型云盘，该参数表示要从哪个CVM实例上卸载云盘。
 	InstanceId *string `json:"InstanceId,omitempty" name:"InstanceId"`
+
+	// 测试，用于指定CXM类型
+	InstanceType  *string `json:"InstanceType,omitempty" name:"InstanceType"`
 }
 
 func (r *DetachDisksRequest) ToJsonString() string {
