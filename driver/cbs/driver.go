@@ -39,10 +39,11 @@ type Driver struct {
 	// TKE cluster ID
 	clusterId         string
 	componentType     string
+	environmentType   string
 	volumeAttachLimit int64
 }
 
-func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType string, volumeAttachLimit int64, client kubernetes.Interface) *Driver {
+func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType, environmentType string, volumeAttachLimit int64, client kubernetes.Interface) *Driver {
 	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
 
 	return &Driver{
@@ -55,11 +56,12 @@ func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType 
 		cbsUrl:            cbsUrl,
 		clusterId:         clusterId,
 		componentType:     componentType,
+		environmentType:   environmentType,
 		volumeAttachLimit: volumeAttachLimit,
 	}
 }
 
-func (drv *Driver) Run(enableMetricsServer bool, timeInterval int, metricPort int64) {
+func (drv *Driver) Run(enableMetricsServer bool, metricPort int64, timeInterval int) {
 	s := csicommon.NewNonBlockingGRPCServer()
 	var cs *cbsController
 	var ns *cbsNode
