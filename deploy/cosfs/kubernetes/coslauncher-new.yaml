@@ -50,3 +50,7 @@ spec:
         - name: host-fuse
           hostPath:
             path: /dev/fuse
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+    type: RollingUpdate
