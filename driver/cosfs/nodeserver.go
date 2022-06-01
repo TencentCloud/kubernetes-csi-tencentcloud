@@ -50,13 +50,6 @@ const (
 	SocketPath               = "/tmp/cosfs.sock"
 )
 
-func newNodeServer(driver *csicommon.CSIDriver, mounter mounter) csi.NodeServer {
-	return &nodeServer{
-		DefaultNodeServer: csicommon.NewDefaultNodeServer(driver),
-		mounter:           mounter,
-	}
-}
-
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
 	mounter mounter
