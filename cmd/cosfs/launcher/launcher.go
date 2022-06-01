@@ -103,10 +103,14 @@ func launcherHandler(w http.ResponseWriter, r *http.Request) {
 		mounter := mount.New("")
 		notMnt, err := mounter.IsLikelyNotMountPoint(items[len(items)-1])
 		if err != nil {
-			extraFields["errmsg"] = fmt.Sprintf("check IsLikelyNotMountPoint failed. %v", err)
-			glog.Errorln(extraFields["errmsg"])
-			generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
-			return
+			if strings.Contains(err.Error(), "endpoint is not connected") {
+				notMnt = false
+			} else {
+				extraFields["errmsg"] = fmt.Sprintf("check IsLikelyNotMountPoint failed. %v", err)
+				glog.Errorln(extraFields["errmsg"])
+				generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
+				return
+			}
 		}
 
 		if notMnt {

@@ -81,3 +81,7 @@ spec:
           hostPath:
             path: /etc/csi-cos
             type: DirectoryOrCreate
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+    type: RollingUpdate
