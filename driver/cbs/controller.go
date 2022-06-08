@@ -19,10 +19,10 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	tag "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag/v20180813"
-
 	cbs "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/v20170312"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 )
 
 const (
@@ -71,11 +71,11 @@ const (
 	StatusAttached   = "ATTACHED"
 	StatusExpanding  = "EXPANDING"
 
-	SnapshotNormal = "NORMAL"
-
-	CVMNodeIDPrefix = "ins-"
-	CXMNodeIDPrefix = "eks-"
-	NodeIDLength    = 12
+	SnapshotNormal   = "NORMAL"
+	SnapShotNotFound = "InvalidSnapshotId.NotFound"
+	CVMNodeIDPrefix  = "ins-"
+	CXMNodeIDPrefix  = "eks-"
+	NodeIDLength     = 12
 
 	CbsUrl     = "cbs.internal.tencentcloudapi.com"
 	CvmUrl     = "cvm.internal.tencentcloudapi.com"
@@ -990,9 +990,18 @@ func (ctrl *cbsController) DeleteSnapshot(ctx context.Context, req *csi.DeleteSn
 	terminateSnapRequest.SnapshotIds = []*string{&snapshotId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	_, err := ctrl.cbsClient.DeleteSnapshots(terminateSnapRequest)
-
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	if err !=nil {
+		if sdkError, ok := err.(*errors.TencentCloudSDKError); ok {
+			if sdkError.GetCode() == SnapShotNotFound {
+				glog.Infof("snapshot %s not found, assuming the snapshot to be already deleted (%v)", snapshotId, err)
+			} else {
+				glog.Errorf("snapshot %s delete failed with TencentCloudSDKError error (%v)", snapshotId, err)
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+		} else {
+			glog.Errorf("snapshot %s delete with error (%v)", snapshotId, err)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 
 	cbsSnapshotsMapsCache.delete(snapshotId)
