@@ -3,18 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
-
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
 
 const ClusterId = "CLUSTER_ID"
@@ -55,23 +51,6 @@ func main() {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		glog.Fatalf("Failed to create client: %v", err)
-	}
-
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
-
-	if *region == "" {
-		r, err := util.GetFromMetadata(metadataClient, metadata.REGION)
-		if err != nil {
-			glog.Fatal(err)
-		}
-		region = &r
-	}
-	if *zone == "" {
-		z, err := util.GetFromMetadata(metadataClient, metadata.ZONE)
-		if err != nil {
-			glog.Fatal(err)
-		}
-		zone = &z
 	}
 
 	drv := cbs.NewDriver(*endpoint, *region, *zone, *nodeID, *cbsUrl, os.Getenv(ClusterId), *componentType, *environmentType, *volumeAttachLimit, clientset)

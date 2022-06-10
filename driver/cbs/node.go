@@ -22,6 +22,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/cloudid"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
@@ -29,6 +30,7 @@ import (
 const (
 	DiskByIDDevicePath       = "/dev/disk/by-id"
 	DiskByIDDeviceNamePrefix = "virtio-"
+	NodeNameKey              = "NODE_ID"
 
 	defaultMaxAttachVolumePerNode = 18
 )
@@ -262,23 +264,29 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	notMnt, err := node.mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			glog.Infof("NodeUnpublishVolume: targetPath %v is already deleted", targetPath)
-			return &csi.NodeUnpublishVolumeResponse{}, nil
-		} else {
+	for n := 0; ; n++ {
+		notMnt, err := node.mounter.IsLikelyNotMountPoint(targetPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				glog.Infof("NodeUnpublishVolume: targetPath %v is already deleted", targetPath)
+				return &csi.NodeUnpublishVolumeResponse{}, nil
+			} else {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+		}
+		if notMnt {
+			if n == 0 {
+				glog.Infof("NodeUnpublishVolume: targetPath %v is already unmounted", targetPath)
+				return &csi.NodeUnpublishVolumeResponse{}, nil
+			}
+			glog.Infof("NodeUnpublishVolume: umount targetPath %v for %d times", targetPath, n)
+			break
+		}
+
+		if err := node.mounter.Unmount(targetPath); err != nil {
+			glog.Errorf("NodeUnpublishVolume: Unmount targetPath %v failed, error %v", targetPath, err)
 			return nil, status.Error(codes.Internal, err.Error())
 		}
-	}
-	if notMnt {
-		glog.Infof("NodeUnpublishVolume: targetPath %v is already unmounted", targetPath)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
-	}
-
-	if err := node.mounter.Unmount(targetPath); err != nil {
-		glog.Errorf("NodeUnpublishVolume: Unmount targetPath %v failed, error %v", targetPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
@@ -487,7 +495,7 @@ func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
 }
 
 func getInstanceIdFromProviderID(client kubernetes.Interface) string {
-	nodeName := os.Getenv("NODE_ID")
+	nodeName := os.Getenv(NodeNameKey)
 	providerID := getProviderIDFromNode(client, nodeName)
 	u, err := url.Parse(providerID)
 	if err != nil {
@@ -505,11 +513,11 @@ func getInstanceIdFromProviderID(client kubernetes.Interface) string {
 		}
 		return instanceId
 	case "tencentcloud":
-		if u.Host == "" || !strings.HasPrefix(u.Host, "eks-") {
+		if u.Host == "" || strings.Contains(u.Host, "/") || !strings.HasPrefix(u.Host, "kn-") {
 			glog.Errorf("invalid format for tencentcloud instance (%s)", providerID)
 			return ""
 		}
-		return u.Host
+		return cloudid.FromKnID(u.Host)
 	default:
 		glog.Errorf("not support providerID %s in node %s", providerID, nodeName)
 		return ""
