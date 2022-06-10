@@ -10,10 +10,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/tags"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
@@ -21,10 +21,11 @@ import (
 
 const (
 	DriverName          = "com.tencent.cloud.csi.cbs"
-	DriverVerision      = "1.0.0"
+	DriverVerision      = "v1.0.0"
 	TopologyZoneKey     = "topology." + DriverName + "/zone"
 	componentController = "controller"
 	componentNode       = "node"
+	ADDRESS             = "ADDRESS"
 )
 
 type Driver struct {
@@ -45,6 +46,38 @@ type Driver struct {
 
 func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType, environmentType string, volumeAttachLimit int64, client kubernetes.Interface) *Driver {
 	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
+
+	metadataClient := metadata.NewMetaData(http.DefaultClient)
+	if region == "" {
+		r, err := util.GetFromMetadata(metadataClient, metadata.REGION)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		region = r
+	}
+	if zone == "" {
+		z, err := util.GetFromMetadata(metadataClient, metadata.ZONE)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		zone = z
+	}
+
+	if componentType == "" {
+		if os.Getenv(ADDRESS) != "" {
+			componentType = componentController
+		} else {
+			componentType = componentNode
+		}
+	}
+
+	if nodeID == "" && os.Getenv(NodeNameKey) == "" && componentType == componentNode {
+		n, err := util.GetFromMetadata(metadataClient, metadata.INSTANCE_ID)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		nodeID = n
+	}
 
 	return &Driver{
 		client:            client,
@@ -72,9 +105,6 @@ func (drv *Driver) Run(enableMetricsServer bool, metricPort int64, timeInterval 
 		cs = newCbsController(drv)
 	case componentNode:
 		ns = newCbsNode(drv)
-	default:
-		cs = newCbsController(drv)
-		ns = newCbsNode(drv)
 	}
 
 	if cs != nil {
@@ -98,7 +128,7 @@ func (drv *Driver) Run(enableMetricsServer bool, metricPort int64, timeInterval 
 	}
 
 	// Sync the tags of cluster and disks
-	if drv.componentType == componentController || os.Getenv("ADDRESS") != "" {
+	if drv.componentType == componentController {
 		go func() {
 			for {
 				rand.Seed(time.Now().UnixNano())
