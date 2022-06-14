@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: csi-cosfs-pv
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 10Gi
+  csi:
+    driver: com.tencent.cloud.csi.cosfs
+    # Specify a unique volumeHandle like pv name or bucket name
+    volumeHandle: csi-cosfs-pv
+    volumeAttributes:
+      # Replaced by the url of your region.
+      url: "http://cos.ap-guangzhou.myqcloud.com"
+      # Replaced by the bucket name you want to use.
+      bucket: "xxx"
+      # cos bucket mount path
+      path: "/"
+      # cosfs log level, will use node syslog, support [dbg|info|warn|err|crit]
+      dbglevel: "err"
+      # You can specify any other options used by the cosfs command in here.
+      additional_args: "-oensure_diskfree=20480"
+    nodePublishSecretRef:
+      # Replaced by the name and namespace of your secret.
+      name: csi-cos-secret
+      namespace: kube-system

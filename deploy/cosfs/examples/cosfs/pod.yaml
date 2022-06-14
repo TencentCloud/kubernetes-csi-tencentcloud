@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: csi-cosfs-pod
+  name: csi-cosfs-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: csi-cosfs-pod
+  template:
+    metadata:
+      labels:
+        k8s-app: csi-cosfs-pod
+    spec:
+      containers:
+        - image: nginx
+          name: csi-cosfs-pod
+          volumeMounts:
+            - mountPath: /csi-cosfs
+              name: csi-cosfs
+      volumes:
+        - name: csi-cosfs
+          persistentVolumeClaim:
+            # Replaced by your pvc name.
+            claimName: csi-cosfs-pvc
