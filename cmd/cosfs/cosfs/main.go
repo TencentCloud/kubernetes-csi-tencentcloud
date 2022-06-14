@@ -18,8 +18,8 @@ package main
 
 import (
 	"flag"
-	"github.com/golang/glog"
 
+	"github.com/golang/glog"
 	cos "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cosfs"
 )
 

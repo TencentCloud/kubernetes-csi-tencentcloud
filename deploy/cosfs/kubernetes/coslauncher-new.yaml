@@ -21,7 +21,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:v2.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:v2.0.2
           imagePullPolicy: "Always"
           resources:
             limits:
@@ -32,7 +32,7 @@ spec:
               memory: 250Mi
           volumeMounts:
             - name: launcher-socket-dir
-              mountPath: /tmp
+              mountPath: /etc/csi-cos
             - name: pods-mount-dir
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"

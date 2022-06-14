@@ -47,9 +47,11 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:v2.0.1
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:v2.0.2
           args:
-            - "--nodeID=$(NODE_ID)"
+            - "--v=5"
+            - "--logtostderr=true"
+            - "--nodeid=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
           env:
             - name: NODE_ID
@@ -63,7 +65,7 @@ spec:
             - name: plugin-dir
               mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
             - name: launcher-socket-dir
-              mountPath: /tmp
+              mountPath: /etc/csi-cos
       volumes:
         - name: plugin-dir
           hostPath:
