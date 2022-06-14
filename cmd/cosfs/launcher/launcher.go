@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,20 +21,37 @@ import (
 const (
 	perm = 0600
 
-	SocketPath = "/tmp/cosfs.sock"
+	SocketPath         = "/etc/csi-cos/cosfs.sock"
+	MounterCosfs       = "cosfs"
+	MounterGoosefsLite = "/goosefs-lite/bin/goosefs-lite"
+	CosfsPasswdPrefix  = "-opasswd_file="
+	RequestCommand     = "command"
+	RequestTargetPath  = "targetPath"
+	ResponseIsMounted  = "isMounted"
+	ResponseSuccess    = "success"
+	ResponseFailure    = "failure"
+	ResponseErrmsg     = "errmsg"
+	ResponseResult     = "result"
 )
 
 func main() {
 	flag.Parse()
 
-	prepareSocketDir()
+	if isFileExisted(SocketPath) {
+		if err := os.Remove(SocketPath); err != nil {
+			glog.Fatalf("remove %s failed, error: %v", SocketPath, err)
+		}
+	}
 
 	r := mux.NewRouter()
-	launcher := r.Path("/launcher").Subrouter()
-	launcher.Methods("POST").HandlerFunc(launcherHandler)
+	create := r.Path("/create").Subrouter()
+	create.Methods("POST").HandlerFunc(createHandler)
 
 	mount := r.Path("/mount").Subrouter()
 	mount.Methods("POST").HandlerFunc(mountHandler)
+
+	umount := r.Path("/umount").Subrouter()
+	umount.Methods("POST").HandlerFunc(umountHandler)
 
 	server := http.Server{
 		Handler: r,
@@ -43,149 +59,187 @@ func main() {
 
 	unixListener, err := net.Listen("unix", SocketPath)
 	if err != nil {
-		glog.Error(err)
-		return
+		glog.Fatalf("net.Listen failed, error: %v", err)
 	}
 
+	glog.Info("cos launcher starting")
 	if err := server.Serve(unixListener); err != nil {
-		glog.Errorf("cosfs launcher server closed unexpected. %v", err)
+		glog.Fatalf("cos launcher server closed unexpected, error: %v", err)
 	}
-
-	glog.Infoln("launcher server is running.")
-	return
 }
 
-func prepareSocketDir() {
-	if !isFileExisted(SocketPath) {
-		pathDir := filepath.Dir(SocketPath)
-		if !isFileExisted(pathDir) {
-			os.MkdirAll(pathDir, os.ModePerm)
-		}
-	} else {
-		os.Remove(SocketPath)
-	}
-
-	glog.Infof("socket dir %s is ready\n", filepath.Dir(SocketPath))
-}
-
-func launcherHandler(w http.ResponseWriter, r *http.Request) {
-	glog.Infoln("enter launcherHandler...")
-
+func createHandler(w http.ResponseWriter, r *http.Request) {
+	glog.Infoln("enter createHandler...")
 	extraFields := make(map[string]string)
 
-	body, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		extraFields["errmsg"] = "read request body failed"
-		glog.Errorf("%s: %v", extraFields["errmsg"], err)
-		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
+	bodyMap := getRequestBodyMap(extraFields, w, r)
+	if bodyMap == nil {
 		return
 	}
 
-	var bodyMap map[string]string
-	if err := json.Unmarshal(body, &bodyMap); err != nil {
-		extraFields["errmsg"] = "unmarshal request body failed"
-		glog.Errorf("%s: %v\n", extraFields["errmsg"], err)
-		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
-		return
-	}
-
-	cmd, ok := bodyMap["command"]
+	targetPath, ok := bodyMap[RequestTargetPath]
 	if !ok {
-		extraFields["errmsg"] = "request body is empty. we need field `command`"
-		glog.Errorln(extraFields["errmsg"])
-		generateHttpResponse(w, "failure", http.StatusBadRequest, extraFields)
+		extraFields[ResponseErrmsg] = "no field `targetPath` in request body"
+		glog.Errorf("error: %s", extraFields[ResponseErrmsg])
+		generateHttpResponse(w, ResponseFailure, http.StatusBadRequest, extraFields)
 		return
 	}
 
-	items := strings.Split(cmd, " ")
-	if items[0] == "umount" {
-		mounter := mount.New("")
-		notMnt, err := mounter.IsLikelyNotMountPoint(items[len(items)-1])
-		if err != nil {
-			if strings.Contains(err.Error(), "endpoint is not connected") {
-				notMnt = false
-			} else {
-				extraFields["errmsg"] = fmt.Sprintf("check IsLikelyNotMountPoint failed. %v", err)
-				glog.Errorln(extraFields["errmsg"])
-				generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
-				return
-			}
-		}
-
-		if notMnt {
-			glog.Infof("%s not mounted, assume umount success.", items[len(items)-1])
-			generateHttpResponse(w, "success", http.StatusOK, extraFields)
+	if !isFileExisted(targetPath) {
+		glog.Infof("target path %s is not exist.", targetPath)
+		if err := os.MkdirAll(targetPath, perm); err != nil {
+			extraFields[ResponseErrmsg] = "create target path failed"
+			glog.Errorf("%s, error: %v", extraFields[ResponseErrmsg], err)
+			generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
 			return
 		}
 	}
 
-	if err := execCmd(cmd); err != nil {
-		extraFields["errmsg"] = fmt.Sprintf("exec command(%s) failed. %v", cmd, err)
-		glog.Errorln(extraFields["errmsg"])
-		generateHttpResponse(w, "failure", http.StatusInternalServerError, extraFields)
+	isMounted, err := isMountPoint(targetPath)
+	if err != nil {
+		extraFields[ResponseErrmsg] = "check target path mounted or not failed"
+		glog.Errorf("%s, error: %v", extraFields[ResponseErrmsg], err)
+		generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
 		return
 	}
-	glog.Infof("exec command %s success.\n", cmd)
 
-	generateHttpResponse(w, "success", http.StatusOK, extraFields)
+	if isMounted {
+		glog.Infof("the target path(%s) is a mount point", targetPath)
+	} else {
+		glog.Infof("the target path(%s) is not a mount point", targetPath)
+	}
+
+	extraFields[ResponseIsMounted] = strconv.FormatBool(isMounted)
+	generateHttpResponse(w, ResponseSuccess, http.StatusOK, extraFields)
 }
 
 func mountHandler(w http.ResponseWriter, r *http.Request) {
 	glog.Infoln("enter mountHandler...")
 	extraFields := make(map[string]string)
 
-	body, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		extraFields["errmsg"] = "read request body failed"
-		glog.Errorf("%s: %v", extraFields["errmsg"], err)
-		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
+	bodyMap := getRequestBodyMap(extraFields, w, r)
+	if bodyMap == nil {
 		return
 	}
 
-	var bodyMap map[string]string
-	if err := json.Unmarshal(body, &bodyMap); err != nil {
-		extraFields["errmsg"] = "unmarshal request body failed"
-		glog.Errorf("%s: %v", extraFields["errmsg"], err)
-		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
-		return
-	}
-
-	stagingPath, ok := bodyMap["stagingPath"]
+	cmd, ok := bodyMap[RequestCommand]
 	if !ok {
-		extraFields["errmsg"] = "request body is empty. we need field `staingPath`"
-		glog.Errorln(extraFields["errmsg"])
-		generateHttpResponse(w, "fail", http.StatusBadRequest, extraFields)
+		extraFields[ResponseErrmsg] = "no field `command` in request body"
+		glog.Errorf("error: %s", extraFields[ResponseErrmsg])
+		generateHttpResponse(w, ResponseFailure, http.StatusBadRequest, extraFields)
 		return
 	}
 
-	if !isFileExisted(stagingPath) {
-		glog.Infof("staging mount point path %s is not exist.\n", stagingPath)
-		if err := createMountPoint(stagingPath); err != nil {
-			glog.Errorf("failed to create staging mount point at %s: %v", stagingPath, err)
-			extraFields["errmsg"] = fmt.Sprintf("create staging mount point failed: %s", err)
-			generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
+	if err := execCmd(cmd); err != nil {
+		extraFields[ResponseErrmsg] = fmt.Sprintf("exec command %s failed, %v", cmd, err)
+		glog.Errorln(extraFields[ResponseErrmsg])
+		generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
+		return
+	}
+
+	cmds := strings.Split(cmd, " ")
+	switch cmds[0] {
+	case MounterCosfs:
+		for _, v := range cmds {
+			if strings.Contains(v, CosfsPasswdPrefix) {
+				if err := os.RemoveAll(filepath.Dir(strings.TrimPrefix(v, CosfsPasswdPrefix))); err != nil {
+					glog.Warning("remove cosfs configs failed: %v", err)
+				}
+			}
+		}
+	case MounterGoosefsLite:
+		for k, v := range cmds {
+			if v == "-c" {
+				if err := os.RemoveAll(filepath.Dir(cmds[k+1])); err != nil {
+					glog.Warning("remove goosefs-lite configs failed: %v", err)
+				}
+			}
+		}
+	}
+
+	glog.Infof("exec command %s success", cmd)
+	generateHttpResponse(w, ResponseSuccess, http.StatusOK, extraFields)
+}
+
+func umountHandler(w http.ResponseWriter, r *http.Request) {
+	glog.Infoln("enter umountHandler...")
+	extraFields := make(map[string]string)
+
+	bodyMap := getRequestBodyMap(extraFields, w, r)
+	if bodyMap == nil {
+		return
+	}
+
+	cmd, ok := bodyMap[RequestCommand]
+	if !ok {
+		extraFields[ResponseErrmsg] = "no field `command` in request body"
+		glog.Errorf("error: %s", extraFields[ResponseErrmsg])
+		generateHttpResponse(w, ResponseFailure, http.StatusBadRequest, extraFields)
+		return
+	}
+
+	items := strings.Split(cmd, " ")
+	isMounted, err := isMountPoint(items[len(items)-1])
+	if err != nil {
+		if strings.Contains(err.Error(), "endpoint is not connected") {
+			isMounted = true
+		} else {
+			extraFields[ResponseErrmsg] = "check target path mounted or not failed"
+			glog.Errorf("%s, error: %v", extraFields[ResponseErrmsg], err)
+			generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
 			return
 		}
 	}
 
-	isMounted, err := isMountPoint(stagingPath)
-	if err != nil {
-		extraFields["errmsg"] = fmt.Sprintf("failed to check whether staging point mounted or not: %v", err)
-		glog.Errorln(extraFields["errmsg"])
-		generateHttpResponse(w, "fail", http.StatusInternalServerError, extraFields)
+	if !isMounted {
+		glog.Infof("%s not mounted, assume umount success.", items[len(items)-1])
+		generateHttpResponse(w, ResponseSuccess, http.StatusOK, extraFields)
 		return
 	}
 
-	if isMounted {
-		glog.Infof("the staging path(%s) is a mount point\n", stagingPath)
-	} else {
-		glog.Infof("the staging path(%s) is not a mount point\n", stagingPath)
+	if err := execCmd(cmd); err != nil {
+		extraFields[ResponseErrmsg] = fmt.Sprintf("exec command failed, %v", err)
+		glog.Errorln(extraFields[ResponseErrmsg])
+		generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
+		return
+	}
+	glog.Infof("exec command %s success.\n", cmd)
+
+	generateHttpResponse(w, ResponseSuccess, http.StatusOK, extraFields)
+}
+
+func getRequestBodyMap(extraFields map[string]string, w http.ResponseWriter, r *http.Request) map[string]string {
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		extraFields[ResponseErrmsg] = "read request body failed"
+		glog.Errorf("%s, error: %v", extraFields[ResponseErrmsg], err)
+		generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
+		return nil
 	}
 
-	extraFields["isMounted"] = strconv.FormatBool(isMounted)
-	generateHttpResponse(w, "success", http.StatusOK, extraFields)
+	var bodyMap map[string]string
+	if err := json.Unmarshal(body, &bodyMap); err != nil {
+		extraFields[ResponseErrmsg] = "unmarshal request body failed"
+		glog.Errorf("%s, error: %v", extraFields[ResponseErrmsg], err)
+		generateHttpResponse(w, ResponseFailure, http.StatusInternalServerError, extraFields)
+		return nil
+	}
+
+	return bodyMap
+}
+
+func generateHttpResponse(w http.ResponseWriter, result string, statusCode int, extra map[string]string) {
+	res := make(map[string]string)
+	res[ResponseResult] = result
+	for k, v := range extra {
+		res[k] = v
+	}
+
+	response, _ := json.Marshal(res)
+	w.WriteHeader(statusCode)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
 }
 
 func isFileExisted(filename string) bool {
@@ -199,33 +253,6 @@ func isFileExisted(filename string) bool {
 	return true
 }
 
-func execCmd(cmd string) error {
-	e := exec.New()
-	output, err := e.Command("sh", "-c", cmd).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("command %s failed: output %s, error: %v", cmd, string(output), err)
-	}
-	glog.V(4).Infof("command %s succeed: %s", cmd, string(output))
-	return nil
-}
-
-func generateHttpResponse(w http.ResponseWriter, result string, statusCode int, extra map[string]string) {
-	res := make(map[string]string)
-	res["result"] = result
-	for k, v := range extra {
-		res[k] = v
-	}
-
-	response, _ := json.Marshal(res)
-	w.WriteHeader(statusCode)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(response)
-}
-
-func createMountPoint(point string) error {
-	return os.MkdirAll(point, perm)
-}
-
 func isMountPoint(path string) (bool, error) {
 	mounter := mount.New("")
 	notMnt, err := mounter.IsLikelyNotMountPoint(path)
@@ -233,4 +260,13 @@ func isMountPoint(path string) (bool, error) {
 		return false, err
 	}
 	return !notMnt, nil
+}
+
+func execCmd(cmd string) error {
+	e := exec.New()
+	output, err := e.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("output: %s, error: %v", string(output), err)
+	}
+	return nil
 }

@@ -5,7 +5,7 @@ ADD . .
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -v -a -ldflags '-extldflags "-static"' -o launcher_${TARGETARCH} cmd/cosfs/launcher/launcher.go
 
-FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:base.1
+FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:base.1
 
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud COSFS CSI Plugin"

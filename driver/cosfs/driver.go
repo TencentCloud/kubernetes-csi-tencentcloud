@@ -44,13 +44,6 @@ func NewDriver(endpoint, driverName, nodeID string) *driver {
 	}
 }
 
-func NewNodeServer(driver *csicommon.CSIDriver) csi.NodeServer {
-	return &nodeServer{
-		DefaultNodeServer: csicommon.NewDefaultNodeServer(driver),
-		mounter:           newMounter(),
-	}
-}
-
 func (d *driver) Start() {
 	server := csicommon.NewNonBlockingGRPCServer()
 	server.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), nil,

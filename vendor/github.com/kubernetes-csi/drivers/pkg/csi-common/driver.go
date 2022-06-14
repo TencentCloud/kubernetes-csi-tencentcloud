@@ -32,7 +32,6 @@ type CSIDriver struct {
 	version string
 	cap     []*csi.ControllerServiceCapability
 	vc      []*csi.VolumeCapability_AccessMode
-        nscap       []*csi.NodeServiceCapability
 }
 
 // Creates a NewCSIDriver object. Assumes vendor version is equal to driver version &
@@ -100,23 +99,4 @@ func (d *CSIDriver) AddVolumeCapabilityAccessModes(vc []csi.VolumeCapability_Acc
 
 func (d *CSIDriver) GetVolumeCapabilityAccessModes() []*csi.VolumeCapability_AccessMode {
 	return d.vc
-}
-
-func (d *CSIDriver) AddNodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) {
-	var nsc []*csi.NodeServiceCapability
-	for _, n := range nl {
-		glog.Infof("Enabling node service capability: %v", n.String())
-		nsc = append(nsc, NewNodeServiceCapability(n))
-	}
-	d.nscap = nsc
-}
-
-func NewNodeServiceCapability(cap csi.NodeServiceCapability_RPC_Type) *csi.NodeServiceCapability {
-	return &csi.NodeServiceCapability{
-		Type: &csi.NodeServiceCapability_Rpc{
-			Rpc: &csi.NodeServiceCapability_RPC{
-				Type: cap,
-			},
-		},
-	}
 }
