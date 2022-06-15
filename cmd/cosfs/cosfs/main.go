@@ -18,11 +18,8 @@ package main
 
 import (
 	"flag"
-	"net/http"
 
-	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
-
 	cos "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cosfs"
 )
 
@@ -34,16 +31,11 @@ var (
 
 func main() {
 	flag.Parse()
-	metadataClient := metadata.NewMetaData(http.DefaultClient)
 
 	if *nodeID == "" {
-		n, err := metadataClient.InstanceID()
-		if err != nil {
-			glog.Fatal(err)
-		}
-		nodeID = &n
+		glog.Fatal("nodeID is empty")
 	}
 
-	driver := cos.NewDriver(*driverName, *nodeID)
-	driver.Start(*endpoint)
+	driver := cos.NewDriver(*endpoint, *driverName, *nodeID)
+	driver.Start()
 }

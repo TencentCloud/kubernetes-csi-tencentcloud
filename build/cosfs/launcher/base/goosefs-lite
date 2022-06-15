@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+#
+# The Alluxio Open Foundation licenses this work under the Apache License, version 2.0
+# (the "License"). You may not use this work except in compliance with the License, which is
+# available at www.apache.org/licenses/LICENSE-2.0
+#
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+# either express or implied, as more fully set forth in the License.
+#
+# See the NOTICE file distributed with this work for information regarding copyright ownership.
+#
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink "$0" || echo "$0")")"; pwd)"
+GOOSEFS_WORK_DIR="$(cd ${SCRIPT_DIR}/..; pwd)"
+GOOSEFS_LOGS_DIR=`grep 'log4j.appender.GOOSEFS_LOGGER.File=' ${GOOSEFS_WORK_DIR}/conf/log4j.properties|awk -F'=' '{print $2}'|xargs dirname`
+mkdir -p ${GOOSEFS_LOGS_DIR}
+
+get_env() {
+  GOOSEFS_FUSE_JAR=${SCRIPT_DIR}/../target/goosefs-lite-1.0.0-jar-with-dependencies.jar
+  CLASSPATH=${GOOSEFS_FUSE_JAR}
+
+  # Check if java is found
+ if [[ -z "${JAVA}" ]]; then
+  if [[ -n "${JAVA_HOME}" ]] && [[ -x "${JAVA_HOME}/bin/java" ]];  then
+    JAVA="${JAVA_HOME}/bin/java"
+  elif [[ -n "$(which java 2>/dev/null)" ]]; then
+    JAVA=$(which java)
+  else
+    echo "Error: Cannot find 'java' on path or under \$JAVA_HOME/bin/."
+    exit 1
+  fi
+ fi
+}
+
+check_java_version() {
+  local java_mjr_vers=$("${JAVA}" -version 2>&1 | awk -F '"' '/version/ {print $2}' | awk -F'.' '{print $1 $2}')
+  if [[ ${java_mjr_vers} -lt 18 ]]; then
+    echo "You are running a version of Java which is older than Java 8.
+     Please use Java 8+ to mount goosefs-lite" >&2
+    return 1
+  else
+    return 0
+  fi
+}
+
+check_fuse_jar() {
+  if ! [[ -f ${GOOSEFS_FUSE_JAR} ]]; then
+    echo "Cannot find ${GOOSEFS_FUSE_JAR}. Please compile goosefs with fuse profile and Java 8"
+    return 1
+  else
+    return 0
+  fi
+}
+
+set_java_opt() {
+  if [[ ${JAVA_OPTS} != *"-Xmx"* ]];then
+    JAVA_OPTS+=" -Xms2G -Xmx2G -XX:+UseG1GC"
+  fi
+  if [[ ${JAVA_OPTS} != *"-XX:MaxDirectMemorySize"* ]];then
+    JAVA_OPTS+=" -XX:MaxDirectMemorySize=4G"
+  fi
+
+  GOOSEFS_FUSE_JAVA_OPTS+=" -Dlog4j.configuration=file:${GOOSEFS_WORK_DIR}/conf/log4j.properties"
+}
+
+check_file_exist() {
+  local FILE_TYPE=$1
+  local FILE_PATH=$2
+  if [[ ! -f "${FILE_PATH}" ]]; then
+    echo "GooseFS lite required ${FILE_TYPE} path ${FILE_PATH} not exist"
+    exit 1
+  fi
+}
+
+mount_fuse() {
+  echo "Starting goosefs-lite on local host."
+  local mount_point=$(realpath -s $1)/
+  if [ "${mount_point}" = "/" ]; then
+      echo "mount point direcotry $1 is invalid, please check this directory"
+      exit 1
+  fi
+  local goosefs_root=$2
+  local full_mount_option=""
+  if [[ ! -z "${mount_option}" ]]; then
+    full_mount_option="big_writes,direct_io,${mount_option}"
+  else
+    full_mount_option="big_writes,direct_io"
+  fi
+
+  if [[ ${NO_DAEMON} -eq "1" ]]; then
+    GOOSEFS_FUSE_JAVA_OPTS+=" -Dgoosefs.logger.type=FUSE_LOGGER,Console"
+  fi
+  res_mount_point=`df -a|grep 'goosefs-lite'|awk '{print $NF"/"}'|grep "${mount_point}"|head -n 1`
+  if [ "${res_mount_point}" = "${mount_point}" ]; then
+    echo "mount failed, mount point ${mount_point} already exist"
+    exit -1
+  fi
+  if [[ -z "${GOOSEFS_LITE_CORE_SITE_CONF_PATH}" ]]; then
+    GOOSEFS_LITE_CORE_SITE_CONF_PATH=${GOOSEFS_WORK_DIR}/conf/core-site.xml
+  fi
+  if [[ -z "${GOOSEFS_LITE_PROPERTIES_CONF_PATH}" ]]; then
+     GOOSEFS_LITE_PROPERTIES_CONF_PATH=${GOOSEFS_WORK_DIR}/conf/goosefs-lite.properties
+  fi
+  check_file_exist core-site.xml "${GOOSEFS_LITE_CORE_SITE_CONF_PATH}"
+  check_file_exist goosefs-lite.properties "${GOOSEFS_LITE_PROPERTIES_CONF_PATH}"
+  echo "core-site.xml path:${GOOSEFS_LITE_CORE_SITE_CONF_PATH}"
+  echo "goosefs-lite.properties path:${GOOSEFS_LITE_PROPERTIES_CONF_PATH}"
+  local cmd="${JAVA} ${JAVA_OPTS} ${GOOSEFS_FUSE_JAVA_OPTS} -jar ${GOOSEFS_FUSE_JAR}\
+    -c ${GOOSEFS_LITE_CORE_SITE_CONF_PATH} \
+    -g ${GOOSEFS_LITE_PROPERTIES_CONF_PATH} \
+    -o ${full_mount_option} \
+    -m ${mount_point} \
+    -r ${goosefs_root}"
+  echo $cmd
+  echo "Starting goosefs-lite process: mounting goosefs path \"${goosefs_root}\" to local mount point \"${mount_point}\" with options=\"${full_mount_option}\""
+
+  if [[ ${NO_DAEMON} -eq "1" ]]; then
+    exec ${cmd}
+  else
+    (nohup ${cmd} > ${GOOSEFS_LOGS_DIR}/goosefs-lite.out 2>&1) &
+    # sleep: workaround to let the bg java process exit on errors, if any
+    sleep 2s
+    if kill -0 $! > /dev/null 2>&1 ; then
+      for idx in `seq 1 3`
+      do
+        res_mount_point=`df -a|grep 'goosefs-lite'|awk '{print $NF"/"}'|grep "${mount_point}"`
+        if [ "${res_mount_point}" != "${mount_point}" ]; then
+          echo "check mount point ${mount_point} res_mount_point:${res_mount_point} for ${idx} times"
+          sleep 2s
+          continue
+        fi
+        echo "Successfully mounted ufs path \"${goosefs_root}\" to ${mount_point}."
+        echo "See ${GOOSEFS_LOGS_DIR}/goosefs-lite.log for logging messages"
+        return 0
+      done
+      echo "Failed to mount ufs path, not found mount point ${mount_point}"
+      exit 1
+    else
+      echo "Failed to mount ufs path \"${goosefs_root}\" to ${mount_point}."
+      echo "See ${GOOSEFS_LOGS_DIR}/goosefs-lite.log and ${GOOSEFS_LOGS_DIR}/goosefs-lite.out for more details"
+      return 1
+    fi
+  fi
+}
+
+umount_fuse() {
+  local mount_point=$(realpath -s $1)/
+  if [ "${mount_point}" = "/" ]; then
+      echo "unmount point direcotry $1 is invalid, please check this directory"
+      exit 1
+  fi
+  local fuse_pid=$(fuse_stat | awk '{print $1,$2}' | grep -w ${mount_point} | awk '{print $1}')
+  if [[ -z ${fuse_pid} ]]; then
+    echo "${mount_point} not mounted" >&2
+    return 1
+  else
+    echo "Unmount fuse at ${mount_point} (PID: ${fuse_pid})."
+    kill ${fuse_pid}
+    return $?
+  fi
+}
+
+fuse_stat() {
+  local fuse_info=$(ps aux | grep goosefs-lite)
+  if [[ -n ${fuse_info} ]]; then
+    echo -e "pid\tmount_point\tcos_path"
+    for mount_point in `df -hl|awk '$1=="goosefs-lite" {print $NF"/"}'`
+    do
+      echo -e "$(ps aux | grep goosefs-lite-1.0.0-jar-with-dependencies.jar|grep ${mount_point} | awk -F' ' '{print $2 "\t" $(NF-2) "\t" $(NF)}')"
+    done
+    return 0
+  fi
+  echo "No mount point found. goosefs lite process is not running."
+  echo -e "${MOUNT_USAGE}"
+  return 1
+}
+
+USAGE_MSG="Usage:\n\tgoosefs-lite [mount|umount|stat]
+
+mount \tmount an COS path to local file system
+umount \tunmount an COS path from local file system
+stat \tshow status of COS mount points"
+
+MOUNT_USAGE="
+Mounts a path in GooseFS namespace (defaults to "/") to mount point on local file system.
+When no argument is given, list the current mount point
+
+Usage:\tgoosefs-lite mount [-n] [-o <mount option>] [-c <core-site.xml path>] [-g <goosefs-lite.properties path>] <mount_point> [cos_path]
+
+-o \tmount options for the fuse daemon
+-n \tno-daemon. This launches the process in the foreground and logs to stdout
+-s \tstackFS. This launches StackFS process for testing purpose
+-c \tcore-site.xml path
+-g \tgoosefs-lite.properties path"
+
+if [[ $# -lt 1 ]]; then
+  echo -e "${USAGE_MSG}" >&2
+  exit 1
+fi
+
+get_env
+check_fuse_jar
+set_java_opt
+
+if [[ $? -ne 0 ]]; then
+  exit 1
+fi
+
+case $1 in
+  mount)
+    shift
+    while getopts "o:nc:g:" option; do
+      case "${option}" in
+        o)
+          mount_option=${OPTARG}
+          ;;
+        n)
+          NO_DAEMON="1"
+          ;;
+        s)
+          STACK_FS="1"
+          ;;
+        c)
+          GOOSEFS_LITE_CORE_SITE_CONF_PATH=${OPTARG}
+          ;;
+        g)
+          GOOSEFS_LITE_PROPERTIES_CONF_PATH=${OPTARG}
+          ;;
+        *)
+          echo -e "${MOUNT_USAGE}" >&2
+          exit 1
+          ;;
+      esac
+    done
+    shift $((${OPTIND} - 1))
+    if [[ $# -eq 0 ]]; then
+      fuse_stat
+      exit $?
+    fi
+    if [[ $# -eq 1 ]]; then
+      mount_fuse $1 /
+      exit $?
+    fi
+    if [[ $# -eq 2 ]]; then
+      mount_fuse $1 $2
+      exit $?
+    fi
+    echo -e "${MOUNT_USAGE}" >&2
+    exit 1
+    ;;
+  umount|unmount)
+    if [[ $# -eq 2 ]]; then
+      umount_fuse $2
+      exit $?
+    fi
+    echo -e "Usage\n\tgoosefs-lite umount mount_point\n\tuse goosefs-lite stat to show mount points" >&2
+    exit 1
+    ;;
+  stat)
+    fuse_stat
+    ;;
+  *)
+    echo -e "${USAGE_MSG}" >&2
+    exit 1
+    ;;
+esac

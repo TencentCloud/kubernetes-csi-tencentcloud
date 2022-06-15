@@ -15,6 +15,9 @@ CFS_MULTI_VERSION?=cfs-multi
 # cos image tag
 COS_VERSION?=cos
 COS_MULTI_VERSION?=cos-multi
+
+# cos-launcher image tag
+COS_LAUNCHER_BASE?=base
 COS_LAUNCHER_VERSION?=cos-launcher
 COS_LAUNCHER_MULTI_VERSION?=cos-launcher-multi
 
@@ -42,13 +45,21 @@ cfs:
 	docker push ${REGISTRY}/csi-tencentcloud-cfs:${CFS_VERSION}
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfs:${CFS_MULTI_VERSION} --push
 
-cos:
+cos: cos-launcher
+	sed -i "s/v1.0.0/${COS_VERSION}/g" driver/cosfs/driver.go
 	docker build . --build-arg TARGETARCH=amd64 -f build/cosfs/cosfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos:${COS_VERSION}
-	docker build . --build-arg TARGETARCH=amd64 -f build/cosfs/launcher/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_VERSION}
 	docker push ${REGISTRY}/csi-tencentcloud-cos:${COS_VERSION}
-	docker push ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_VERSION}
+
+	sed -i "s/${COS_VERSION}/${COS_MULTI_VERSION}/g" driver/cosfs/driver.go
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cosfs/cosfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos:${COS_MULTI_VERSION} --push
+
+cos-launcher:
+	docker build . --build-arg TARGETARCH=amd64 -f build/cosfs/launcher/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_VERSION}
+	docker push ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_VERSION}
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cosfs/launcher/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_MULTI_VERSION} --push
+
+cos-launcher-base:
+	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cosfs/launcher/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_BASE} --push
 
 chdfs:
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/chdfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION} --push
