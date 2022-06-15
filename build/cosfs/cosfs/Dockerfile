@@ -1,4 +1,4 @@
-FROM golang:1.12 as builder
+FROM golang:1.16 as builder
 
 WORKDIR /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud
 ADD . .
@@ -12,6 +12,5 @@ LABEL description="TencentCloud COS CSI Plugin"
 
 ARG TARGETARCH
 COPY --from=builder /go/src/github.com/tencentcloud/kubernetes-csi-tencentcloud/csi-cos_${TARGETARCH} /bin/csi-cos
-COPY build/cosfs/cosfs/cos-csi.sh /cos-csi.sh
-RUN chmod +x /cos-csi.sh && echo "hosts: files dns" > /etc/nsswitch.conf
-ENTRYPOINT ["/cos-csi.sh"]
+RUN echo "hosts: files dns" > /etc/nsswitch.conf
+ENTRYPOINT ["/bin/csi-cos"]

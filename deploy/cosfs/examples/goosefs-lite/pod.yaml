@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: csi-goosefs-lite-pod
+  name: csi-goosefs-lite-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: csi-goosefs-lite-pod
+  template:
+    metadata:
+      labels:
+        k8s-app: csi-goosefs-lite-pod
+    spec:
+      containers:
+        - image: nginx
+          name: csi-goosefs-lite-pod
+          volumeMounts:
+            - mountPath: /csi-goosefs-lite
+              name: csi-goosefs-lite
+      volumes:
+        - name: csi-goosefs-lite
+          persistentVolumeClaim:
+            # Replaced by your pvc name.
+            claimName: csi-goosefs-lite-pvc

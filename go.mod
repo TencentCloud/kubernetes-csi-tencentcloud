@@ -17,6 +17,7 @@ require (
 	github.com/kubernetes-csi/drivers v1.0.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.0.0
+	github.com/spf13/viper v1.3.2
 	github.com/tencentcloud/tencentcloud-sdk-go v1.0.122
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634 // indirect

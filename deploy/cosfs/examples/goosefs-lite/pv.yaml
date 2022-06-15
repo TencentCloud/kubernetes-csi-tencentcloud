@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: csi-goosefs-lite-pv
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 10Gi
+  csi:
+    driver: com.tencent.cloud.csi.cosfs
+    # Specify a unique volumeHandle like pv name or bucket name
+    volumeHandle: csi-goosefs-lite-pv
+    volumeAttributes:
+      # Replaced by the url of your region.
+      url: "http://cos.ap-guangzhou.myqcloud.com"
+      # Replaced by the bucket name you want to use.
+      bucket: "xxx"
+      # cos bucket mount path
+      path: "/"
+      # cos mounter, support [cosfs|goosefs-lite]
+      mounter: "goosefs-lite"
+      # config for goosefs-lite, eg: fs.cosn.maxRetries=100, fs.cosn.retry.interval.seconds=4
+      core_site:
+      # config for goosefs-lite, eg: goosefs.fuse.umount.timeout=110000
+      goosefs_lite: ""
+    nodePublishSecretRef:
+      # Replaced by the name and namespace of your secret.
+      name: csi-cos-secret
+      namespace: kube-system

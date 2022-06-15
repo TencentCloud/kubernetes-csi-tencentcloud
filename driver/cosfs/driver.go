@@ -18,39 +18,35 @@ package cos
 
 import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 )
 
-const version = "0.3.0"
+const version = "v1.0.0"
 
-// Driver is an abstract for CSI Driver.
-type Driver interface {
-	// Start starts the CSI driver.
-	Start(endpoint string)
+type driver struct {
+	csiDriver *csicommon.CSIDriver
+	endpoint  string
 }
 
 // NewDriver creates a new CSI driver for COS.
-func NewDriver(driverName, nodeID string) Driver {
+func NewDriver(endpoint, driverName, nodeID string) *driver {
+	glog.Infof("Driver: %v version: %v", driverName, version)
+
 	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
+
 	return &driver{
-		nodeServer:       newNodeServer(csiDriver, newMounter()),
-		identityServer:   csicommon.NewDefaultIdentityServer(csiDriver),
-		controllerServer: newControllerServer(csiDriver),
+		csiDriver: csiDriver,
+		endpoint:  endpoint,
 	}
 }
 
-// driver is an implement for COS CSI driver.
-type driver struct {
-	nodeServer       csi.NodeServer
-	identityServer   csi.IdentityServer
-	controllerServer csi.ControllerServer
-}
-
-func (d *driver) Start(endpoint string) {
+func (d *driver) Start() {
 	server := csicommon.NewNonBlockingGRPCServer()
-	server.Start(endpoint, d.identityServer, d.controllerServer, d.nodeServer)
+	server.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), nil,
+		NewNodeServer(d.csiDriver))
 	server.Wait()
 }
