@@ -39,6 +39,7 @@ spec:
         - ip: "169.254.0.95"
           hostnames:
             - "cfs.internal.tencentcloudapi.com"
+            - "cfs.test.tencentcloudapi.com"
       containers:
         - name: csi-provisioner
           image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v2.0.4

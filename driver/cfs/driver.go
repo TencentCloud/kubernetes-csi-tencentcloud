@@ -17,7 +17,10 @@ limitations under the License.
 package cfs
 
 import (
+	"net/http"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/dbdd4us/qcloudapi-sdk-go/metadata"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
@@ -27,75 +30,91 @@ import (
 	"k8s.io/utils/mount"
 )
 
-type driver struct {
-	csiDriver *csicommon.CSIDriver
-	endpoint  string
-
-	ids *csicommon.DefaultIdentityServer
-	ns  *nodeServer
-
-	cap   []*csi.VolumeCapability_AccessMode
-	cscap []*csi.ControllerServiceCapability
-
-	region string
-	zone   string
-	cfsUrl string
-	componentType string
-}
-
 const (
-	DriverName     = "com.tencent.cloud.csi.cfs"
-	DriverVerision = "1.0.0"
+	DriverName          = "com.tencent.cloud.csi.cfs"
+	DriverVersion       = "v1.0.0"
 	componentController = "controller"
-	componentNode = "node"
+	componentNode       = "node"
+
+	Url     = "cfs.internal.tencentcloudapi.com"
+	TestUrl = "cfs.test.tencentcloudapi.com"
 )
 
-func NewDriver(nodeID, endpoint, region, zone, cfsUrl, componentType string) *driver {
-	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
+type driver struct {
+	csiDriver *csicommon.CSIDriver
 
-	d := &driver{}
+	endpoint        string
+	region          string
+	zone            string
+	cfsUrl          string
+	componentType   string
+	environmentType string
+}
 
-	d.endpoint = endpoint
-	d.cfsUrl = cfsUrl
-	d.region = region
-	d.zone = zone
-	d.componentType = componentType
+func NewDriver(nodeID, endpoint, region, zone, cfsUrl, componentType, environmentType string) *driver {
+	glog.Infof("Driver: %v version: %v", DriverName, DriverVersion)
 
-	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVerision, nodeID)
+	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVersion, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
+	csiDriver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+	})
 
-	// CFS plugin does not support ControllerServiceCapability now.
-	// If support is added, it should set to appropriate
-	// ControllerServiceCapability RPC types.
-	csiDriver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME})
-
-	d.csiDriver = csiDriver
-
-	return d
+	return &driver{
+		csiDriver:       csiDriver,
+		endpoint:        endpoint,
+		cfsUrl:          cfsUrl,
+		zone:            zone,
+		region:          region,
+		componentType:   componentType,
+		environmentType: environmentType,
+	}
 }
 
-func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
+func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
-		mounter:           mounter,
+		mounter:           mount.New(""),
 	}
 }
 
 func NewControllerServer(d *driver) *controllerServer {
 	secretID, secretKey, token, _ := util.GetSercet()
-
 	cred := v3common.Credential{
 		SecretId:  secretID,
 		SecretKey: secretKey,
 		Token:     token,
 	}
 
+	metadataClient := metadata.NewMetaData(http.DefaultClient)
+	if d.region == "" {
+		r, err := util.GetFromMetadata(metadataClient, metadata.REGION)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		d.region = r
+	}
+	if d.zone == "" {
+		z, err := util.GetFromMetadata(metadataClient, metadata.ZONE)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		d.zone = z
+	}
+
 	cpf := v3profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = d.cfsUrl
+	if d.cfsUrl != "" {
+		cpf.HttpProfile.Endpoint = d.cfsUrl
+	} else if d.environmentType == "test" {
+		cpf.HttpProfile.Endpoint = TestUrl
+	} else {
+		cpf.HttpProfile.Endpoint = Url
+	}
 
 	cfsClient, _ := cfsv3.NewClient(&cred, d.region, cpf)
+
 	return &controllerServer{
 		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
 		cfsClient:               cfsClient,
@@ -107,16 +126,18 @@ func (d *driver) Run() {
 	s := csicommon.NewNonBlockingGRPCServer()
 	var cs *controllerServer
 	var ns *nodeServer
+
 	glog.Infof("Specify component type: %s", d.componentType)
 	switch d.componentType {
-	    case componentController:
-			cs = NewControllerServer(d)
-	    case componentNode:
-		    ns = NewNodeServer(d, mount.New(""))
-	    default:
-			cs = NewControllerServer(d)
-			ns = NewNodeServer(d, mount.New(""))
+	case componentController:
+		cs = NewControllerServer(d)
+	case componentNode:
+		ns = NewNodeServer(d)
+	default:
+		cs = NewControllerServer(d)
+		ns = NewNodeServer(d)
 	}
+
 	s.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), cs, ns)
 	s.Wait()
 }
