@@ -9,6 +9,7 @@ CBS_VERSION?=cbs
 CBS_MULTI_VERSION?=cbs-multi
 
 # cfs image tag
+CFS_BASE?=base
 CFS_VERSION?=cfs
 CFS_MULTI_VERSION?=cfs-multi
 
@@ -41,9 +42,15 @@ cbs-base:
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cbs/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_BASE} --push
 
 cfs:
+	sed -i "s/v1.0.0/${CFS_VERSION}/g" driver/cfs/driver.go
 	docker build . --build-arg TARGETARCH=amd64 -f build/cfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfs:${CFS_VERSION}
 	docker push ${REGISTRY}/csi-tencentcloud-cfs:${CFS_VERSION}
+
+	sed -i "s/${CFS_VERSION}/${CFS_MULTI_VERSION}/g" driver/cfs/driver.go
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfs:${CFS_MULTI_VERSION} --push
+
+cfs-base:
+	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cfs/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfs:${CFS_BASE} --push
 
 cos: cos-launcher
 	sed -i "s/v1.0.0/${COS_VERSION}/g" driver/cosfs/driver.go
