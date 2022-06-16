@@ -82,3 +82,7 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
             type: Directory
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+    type: RollingUpdate
