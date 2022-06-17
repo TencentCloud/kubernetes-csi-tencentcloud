@@ -50,7 +50,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.4
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.5
           imagePullPolicy: "Always"
           args :
             - "--nodeID=$(NODE_ID)"
@@ -82,3 +82,7 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
             type: Directory
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+    type: RollingUpdate
