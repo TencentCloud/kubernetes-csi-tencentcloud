@@ -10,30 +10,25 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	cfsv3 "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cfs/v20190719"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	v3common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
-)
-
-var (
-	CFSDefaultStorageType  = "SD"
-	CFSDefaultPGroupID     = "pgroupbasic"
-	CFSDefaultNetInterface = "vpc"
-	CFSDefaultProtocol     = "NFS"
-	CFSStateCreating       = "creating"
-	CFSStateAvailble       = "available"
-	GB                     = 1 << (10 * 3)
 )
 
 const (
-	// 通用性能型
-	StorageTypeHP = "HP"
-	// 通用标准型
+	DefaultPGroupID     = "pgroupbasic"
+	DefaultNetInterface = "vpc"
+	DefaultProtocol     = "NFS"
+	StateAvailble       = "available"
+	GB                  = 1 << (10 * 3)
+
+	// StorageTypeSD 通用标准型
 	StorageTypeSD = "SD"
+	// StorageTypeHP 通用性能型
+	StorageTypeHP = "HP"
 )
 
 type controllerServer struct {
@@ -58,14 +53,12 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	capacityBytes := req.GetCapacityRange().GetRequiredBytes()
 	volSizeBytes := int64(capacityBytes)
 	requestGiB := int(util.RoundUpGiB(volSizeBytes))
-
 	parameters := req.GetParameters()
 
 	glog.Infof("req.name is :  %s   ", req.Name)
 
 	var zone, storageType, pgroupID, vpcID, subnetID string
-        
-	cfsTags := []*cfsv3.TagInfo{}
+	var cfsTags []*cfsv3.TagInfo
 	for k, v := range parameters {
 		switch strings.ToLower(k) {
 		case "zone":
@@ -94,22 +87,22 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	request := cfsv3.NewCreateCfsFileSystemRequest()
-        
-        request.ResourceTags = cfsTags
+
+	request.ResourceTags = cfsTags
 
 	if storageType != "" {
 		request.StorageType = common.StringPtr(storageType)
 	} else {
-		request.StorageType = common.StringPtr(CFSDefaultStorageType)
+		request.StorageType = common.StringPtr(StorageTypeSD)
 	}
 
 	if pgroupID != "" {
 		request.PGroupId = common.StringPtr(pgroupID)
 	} else {
-		request.PGroupId = common.StringPtr(CFSDefaultPGroupID)
+		request.PGroupId = common.StringPtr(DefaultPGroupID)
 	}
 
-	request.NetInterface = common.StringPtr(CFSDefaultNetInterface)
+	request.NetInterface = common.StringPtr(DefaultNetInterface)
 
 	if zone != "" {
 		request.Zone = common.StringPtr(zone)
@@ -123,7 +116,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		fsName = fmt.Sprintf("%s_%s", clusterId, name)
 	}
 	request.FsName = common.StringPtr(fsName)
-	request.Protocol = common.StringPtr(CFSDefaultProtocol)
+	request.Protocol = common.StringPtr(DefaultProtocol)
 
 	if vpcID == "" {
 		return nil, status.Error(codes.InvalidArgument, "VpcID should not nil")
@@ -138,7 +131,6 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	updateCfsClent(cs.cfsClient)
 	response, err := cs.cfsClient.CreateCfsFileSystem(request)
-
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -150,7 +142,6 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	ticker := time.NewTicker(time.Second * 3)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*180)
 	defer cancel()
 
@@ -168,8 +159,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			if descResp.Response != nil && len(descResp.Response.FileSystems) >= 1 {
 				for _, f := range descResp.Response.FileSystems {
 					if *f.FileSystemId == *cfsID && f.LifeCycleState != nil {
-						if *f.LifeCycleState == CFSStateAvailble {
-
+						if *f.LifeCycleState == StateAvailble {
 							// describe mount point
 							mountTargetReq := cfsv3.NewDescribeMountTargetsRequest()
 							mountTargetReq.FileSystemId = cfsID
@@ -223,11 +213,9 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	updateCfsClent(cs.cfsClient)
-
 	cfsID := common.StringPtr(req.VolumeId)
 	descReq := cfsv3.NewDescribeCfsFileSystemsRequest()
 	descReq.FileSystemId = cfsID
-
 	descResp, err := cs.cfsClient.DescribeCfsFileSystems(descReq)
 	if err != nil {
 		glog.Errorf("DescribeCfsFileSystems %v failed: %v", *cfsID, err)
@@ -239,24 +227,8 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
-	isHPFileSystem := false
-	for _, f := range descResp.Response.FileSystems {
-		if *f.StorageType == StorageTypeHP {
-			isHPFileSystem = true
-		}
-	}
-
-	// 如果是性能型文件系统，先删除挂载点
-	if isHPFileSystem {
-		if err := cs.deleteMountTargetsForHPFileSystem(cfsID); err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
-		glog.Infof("%v is HP filesystem, we have deleted its mountTargets.", req.VolumeId)
-	}
-
 	request := cfsv3.NewDeleteCfsFileSystemRequest()
 	request.FileSystemId = cfsID
-
 	if _, err := cs.cfsClient.DeleteCfsFileSystem(request); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
