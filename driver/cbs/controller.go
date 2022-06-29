@@ -579,9 +579,9 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	instanceId := req.NodeId
 
 	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
-		glog.Infof("ControllerPublishVolume: attach disk %s to node %s, but the node's instanceType is unsupported.", diskId, instanceId)
-		return &csi.ControllerPublishVolumeResponse{}, nil
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: attach disk %s to node %s, but the node's instanceType is unsupported.", diskId, instanceId)
 	}
+
 	listCbsRequest := cbs.NewDescribeDisksRequest()
 	listCbsRequest.DiskIds = []*string{&diskId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
