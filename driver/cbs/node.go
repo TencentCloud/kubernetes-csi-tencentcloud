@@ -22,7 +22,6 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
-	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/cloudid"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 )
@@ -517,7 +516,7 @@ func getInstanceIdFromProviderID(client kubernetes.Interface) string {
 			glog.Errorf("invalid format for tencentcloud instance (%s)", providerID)
 			return ""
 		}
-		return cloudid.FromKnID(u.Host)
+		return strings.ReplaceAll(u.Host, "kn-", "eks-")
 	default:
 		glog.Errorf("not support providerID %s in node %s", providerID, nodeName)
 		return ""
