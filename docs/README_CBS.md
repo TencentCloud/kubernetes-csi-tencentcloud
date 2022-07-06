@@ -52,6 +52,12 @@ data:
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
 ```
 
+#### snapshot-crd
+
+```sh
+kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
+```
+
 ### rbac
 
 ```sh
@@ -65,7 +71,6 @@ Kubernetes version >= v1.18.x
 ```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-new.yaml
-kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
 Kubernetes version < v1.18.x
@@ -73,7 +78,6 @@ Kubernetes version < v1.18.x
 ```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-old.yaml
-kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
 ### examples
