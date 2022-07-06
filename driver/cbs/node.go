@@ -2,6 +2,7 @@ package cbs
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -386,11 +387,15 @@ func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 	glog.Infof("NodeExpandVolume: NodeExpandVolumeRequest is %v", *req)
 
 	volumeID := req.GetVolumeId()
-	if len(volumeID) == 0 {
+	if volumeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
+	volumePath := req.GetVolumePath()
+	if volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume Path not provided")
+	}
 
-	args := []string{"-o", "source", "--noheadings", "--target", req.GetVolumePath()}
+	args := []string{"-o", "source", "--noheadings", "--target", volumePath}
 	output, err := node.mounter.Exec.Command("findmnt", args...).Output()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not determine device path: %v, raw block device or unmounted", err)
@@ -398,11 +403,17 @@ func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 
 	devicePath := strings.TrimSpace(string(output))
 	if len(devicePath) == 0 {
-		return nil, status.Errorf(codes.Internal, "Could not get valid device for mount path: %v", req.GetVolumePath())
+		return nil, status.Errorf(codes.Internal, "Could not get valid device for mount path: %v", volumePath)
 	}
+
+	err = checkVolumePathCapacity(devicePath, req.CapacityRange.RequiredBytes)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "check volumePath(%s) capacity failed, error: %v", volumePath, err)
+	}
+
 	r := resizefs.NewResizeFs(&node.mounter)
-	if _, err := r.Resize(devicePath, req.GetVolumePath()); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not resize volume %s %s:  %v", volumeID, devicePath, err)
+	if _, err := r.Resize(devicePath, volumePath); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not resize volume %s %s: %v", volumeID, devicePath, err)
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil
@@ -625,4 +636,19 @@ func pathExist(path string) (bool, error) {
 	} else {
 		return false, err
 	}
+}
+
+func checkVolumePathCapacity(devicePath string, requiredBytes int64) error {
+	file, err := os.Open(devicePath)
+	if err != nil {
+		return fmt.Errorf("open devicePath %s failed, err: %s", devicePath, err)
+	}
+	capacity, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		return fmt.Errorf("seek to end of device %s failed, err: %s", devicePath, err)
+	}
+	if capacity != requiredBytes {
+		return fmt.Errorf("device haven't resized, device: %v, required: %v", capacity, requiredBytes)
+	}
+	return nil
 }

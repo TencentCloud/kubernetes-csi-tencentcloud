@@ -63,7 +63,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.6
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.7
           command:
             - "/csi-tencentcloud-cbs"
           args:

@@ -55,6 +55,11 @@ data:
   TENCENTCLOUD_CBS_API_SECRET_KEY: "<SECRET_KEY>"
 ```
 
+#### 创建snapshot-crd
+
+```sh
+kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
+```
 
 #### 创建rbac
 
@@ -71,7 +76,6 @@ Kubernetes v1.18.x及以上版本创建controller plugin和node plugin
 ```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-new.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-new.yaml
-kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
 Kubernetes v1.18.x以下版本创建controller plugin和node plugin
@@ -79,7 +83,6 @@ Kubernetes v1.18.x以下版本创建controller plugin和node plugin
 ```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-old.yaml
 kubectl apply -f  deploy/cbs/kubernetes/csi-node-old.yaml
-kubectl apply -f  deploy/cbs/kubernetes/snapshot-crd.yaml
 ```
 
 #### 简单测试验证

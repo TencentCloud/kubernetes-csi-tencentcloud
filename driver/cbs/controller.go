@@ -192,13 +192,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
+	volumeTags := make(map[string]string)
+	if ctrl.clusterId != "" {
+		volumeTags[TagForDeletionCreateBy] = "yes"
+		volumeTags[TagForDeletionClusterId] = ctrl.clusterId
+	}
+
 	var aspId, volumeZone, cdcId string
 	inputVolumeType := DiskTypeDefault
 	volumeChargeType := DiskChargeTypeDefault
 	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
 	volumeChargePrepaidPeriod := 1
 	projectId := 0
-	volumeTags := make([]*cbs.Tag, 0)
 	throughputPerformance := 0
 	for k, v := range req.Parameters {
 		switch strings.ToLower(k) {
@@ -231,10 +236,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 				if kv == nil || len(kv) != 2 {
 					continue
 				}
-				volumeTags = append(volumeTags, &cbs.Tag{
-					Key:   &kv[0],
-					Value: &kv[1],
-				})
+				volumeTags[kv[0]] = kv[1]
 			}
 		case "throughputperformance":
 			var err error
@@ -424,15 +426,17 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	} else if tagResp.Response != nil && len(tagResp.Response.Tags) > 0 {
 		glog.Infof("cluster %v's tags count is %v", ctrl.clusterId, *tagResp.Response.TotalCount)
 		for _, tag := range tagResp.Response.Tags {
-			createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: tag.TagKey, Value: tag.TagValue})
+			volumeTags[*tag.TagKey] = *tag.TagValue
 		}
 	}
 
-	createCbsReq.Tags = append(createCbsReq.Tags, volumeTags...)
-
-	if ctrl.clusterId != "" {
-		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionCreateBy), Value: common.StringPtr("yes")})
-		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{Key: common.StringPtr(TagForDeletionClusterId), Value: common.StringPtr(ctrl.clusterId)})
+	for k, v := range volumeTags {
+		key := k
+		value := v
+		createCbsReq.Tags = append(createCbsReq.Tags, &cbs.Tag{
+			Key:   &key,
+			Value: &value,
+		})
 	}
 
 	glog.Infof("createCbsReq: %+v", createCbsReq)

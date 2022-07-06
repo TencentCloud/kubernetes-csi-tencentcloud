@@ -13,7 +13,7 @@ metadata:
   namespace: kube-system
 rules:
   - apiGroups: [""]
-    resources: ["secrets", "nodes"]
+    resources: ["nodes"]
     verbs: ["get", "list"]
 
 ---
