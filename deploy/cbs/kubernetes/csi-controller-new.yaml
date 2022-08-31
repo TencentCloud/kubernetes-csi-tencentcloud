@@ -11,9 +11,24 @@ spec:
       app: cbs-csi-controller
   template:
     metadata:
+    # for support nodeless cluster in tke
+    # annotations:
+    #   eks.tke.cloud.tencent.com/norm: "true"
       labels:
         app: cbs-csi-controller
     spec:
+      tolerations:
+        - operator: Exists
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: node.kubernetes.io/instance-type
+                  operator: NotIn
+                  values:
+                    - CHC
+                    - external
       serviceAccountName: cbs-csi-controller-sa
       priorityClassName: system-node-critical
       hostAliases:
@@ -129,7 +144,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.7
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.8
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"
