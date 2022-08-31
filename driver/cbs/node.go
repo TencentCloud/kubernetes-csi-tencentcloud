@@ -144,11 +144,9 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	if strings.HasPrefix(node.nodeID, CXMNodeIDPrefix) {
-		r := resizefs.NewResizeFs(&node.mounter)
-		if _, err := r.Resize(diskSource, stagingTargetPath); err != nil {
-			return nil, status.Errorf(codes.Internal, "NodeStageVolume: could not resize cxm volume %q (%q):  %v", diskSource, stagingTargetPath, err)
-		}
+	r := resizefs.NewResizeFs(&node.mounter)
+	if _, err := r.Resize(diskSource, stagingTargetPath); err != nil && !isNotSupport(err) {
+		return nil, status.Errorf(codes.Internal, "NodeStageVolume: could not resize volume %v (%v):  %v", diskSource, stagingTargetPath, err)
 	}
 
 	return &csi.NodeStageVolumeResponse{}, nil
@@ -502,6 +500,13 @@ func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
 	}
 
 	return int64(defaultMaxAttachVolumePerNode)
+}
+
+func isNotSupport(err error) bool {
+	if strings.Contains(err.Error(), "resize of format") && strings.Contains(err.Error(), "is not supported for device") {
+		return true
+	}
+	return false
 }
 
 func getInstanceIdFromProviderID(client kubernetes.Interface) string {

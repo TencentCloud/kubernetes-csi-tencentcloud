@@ -13,15 +13,18 @@ spec:
       labels:
         app: cbs-csi-node
     spec:
+      tolerations:
+        - operator: Exists
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: beta.kubernetes.io/instance-type
-                    operator: NotIn
-                    values:
-                      - CHC
+                - key: node.kubernetes.io/instance-type
+                  operator: NotIn
+                  values:
+                    - CHC
+                    - external
       serviceAccount: cbs-csi-node-sa
       hostNetwork: true
       hostPID: true
@@ -63,7 +66,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.7
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.8
           command:
             - "/csi-tencentcloud-cbs"
           args:
@@ -72,10 +75,11 @@ spec:
             - "--endpoint=unix:///csi/csi.sock"
             - "--component_type=node"
           env:
-            - name: NODE_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
+          # for support nodeless cluster in tke
+          # - name: NODE_ID
+          #   valueFrom:
+          #     fieldRef:
+          #       fieldPath: spec.nodeName
             - name: TENCENTCLOUD_API_SECRET_ID
               valueFrom:
                 secretKeyRef:
