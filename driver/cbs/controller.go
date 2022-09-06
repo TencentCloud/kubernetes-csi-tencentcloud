@@ -184,9 +184,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	for _, c := range req.VolumeCapabilities {
-		if c.GetBlock() != nil {
-			return nil, status.Error(codes.InvalidArgument, "block volume is not supported")
-		}
 		if c.AccessMode.Mode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
 			return nil, status.Error(codes.InvalidArgument, "block access mode only support singer node writer")
 		}
