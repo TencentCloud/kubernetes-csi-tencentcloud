@@ -303,8 +303,8 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	sizeGb := uint64(volumeCapacity / int64(GB))
-	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, sizeGb)
+	size := uint64(volumeCapacity / int64(GB))
+	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, size)
 	if err != nil {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -313,13 +313,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if volumeType == "" {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrDiskTypeNotAvaliable.Code).Inc()
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no available storage in zone: %s", volumeZone))
-	}
-
-	var size uint64
-	if sizeGb == sizeGb/10*10 {
-		size = uint64(sizeGb)
-	} else {
-		size = uint64(((sizeGb / 10) + 1) * 10)
 	}
 
 	volumeEncrypt, ok := req.Parameters[EncryptAttr]
