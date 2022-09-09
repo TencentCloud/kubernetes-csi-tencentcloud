@@ -99,11 +99,8 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	}()
 
 	diskID := req.VolumeId
-
 	stagingTargetPath := req.StagingTargetPath
-
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	mountFsType := req.GetVolumeCapability().GetMount().GetFsType()
 
 	isBlock := req.GetVolumeCapability().GetBlock() != nil
 	if isBlock {
@@ -149,6 +146,11 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	if diskSource == device || filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID) == device {
 		glog.Infof("NodeStageVolume: volume %v already staged", diskID)
 		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
+	mountFsType := req.GetVolumeCapability().GetMount().GetFsType()
+	if mountFsType == "xfs" {
+		mountFlags = append(mountFlags, "nouuid")
 	}
 
 	if err := node.mounter.FormatAndMount(diskSource, stagingTargetPath, mountFsType, mountFlags); err != nil {
