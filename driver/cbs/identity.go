@@ -14,7 +14,7 @@ func newCbsIdentity() *cbsIdentity {
 func (identity *cbsIdentity) GetPluginInfo(context.Context, *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
 		Name:          DriverName,
-		VendorVersion: DriverVerision,
+		VendorVersion: DriverVersion,
 	}, nil
 }
 
