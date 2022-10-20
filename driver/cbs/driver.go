@@ -21,8 +21,9 @@ import (
 
 const (
 	DriverName          = "com.tencent.cloud.csi.cbs"
-	DriverVerision      = "v1.0.0"
+	DriverVersion       = "v1.0.0"
 	TopologyZoneKey     = "topology." + DriverName + "/zone"
+	TopologyInstanceKey = "topology." + DriverName + "/instance"
 	componentController = "controller"
 	componentNode       = "node"
 	ADDRESS             = "ADDRESS"
@@ -42,10 +43,11 @@ type Driver struct {
 	componentType     string
 	environmentType   string
 	volumeAttachLimit int64
+	cleanDevicemapper bool
 }
 
-func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType, environmentType string, volumeAttachLimit int64, client kubernetes.Interface) *Driver {
-	glog.Infof("Driver: %v version: %v", DriverName, DriverVerision)
+func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType, environmentType string, volumeAttachLimit int64, cleanDevicemapper bool, client kubernetes.Interface) *Driver {
+	glog.Infof("Driver: %v version: %v", DriverName, DriverVersion)
 
 	metadataClient := metadata.NewMetaData(http.DefaultClient)
 	if region == "" {
@@ -91,6 +93,7 @@ func NewDriver(endpoint, region, zone, nodeID, cbsUrl, clusterId, componentType,
 		componentType:     componentType,
 		environmentType:   environmentType,
 		volumeAttachLimit: volumeAttachLimit,
+		cleanDevicemapper: cleanDevicemapper,
 	}
 }
 
