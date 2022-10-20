@@ -66,9 +66,15 @@ func updateClient(cbsClient *cbs.Client, cvmClient *cvm.Client, tagclient *tag.C
 }
 
 func convertToIntreeTargetPath(targetPath string) string {
+	if strings.Contains(targetPath, "volumeDevices") {
+		return ""
+	}
 	return strings.Replace(strings.TrimSuffix(targetPath, "/mount"), "~csi", "~qcloud-cbs", 1)
 }
 
 func convertToIntreeStagingPath(targetPath, volumeId string) string {
+	if strings.Contains(targetPath, "volumeDevices") {
+		return ""
+	}
 	return strings.Split(targetPath, "/pods/")[0] + "/plugins/kubernetes.io/qcloud-cbs/mounts/" + volumeId
 }

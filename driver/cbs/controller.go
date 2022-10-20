@@ -30,43 +30,22 @@ const (
 
 	DiskTypeCloudBasic   = "CLOUD_BASIC"
 	DiskTypeCloudPremium = "CLOUD_PREMIUM"
-	DiskTypeCloudSsd     = "CLOUD_SSD"
 	DiskTypeCloudHSSD    = "CLOUD_HSSD"
 	DiskTypeCloudTSSD    = "CLOUD_TSSD"
 
-	DiskTypeDefault = DiskTypeCloudPremium
-
-	// cbs disk charge type
 	DiskChargeTypePrePaid        = "PREPAID"
 	DiskChargeTypePostPaidByHour = "POSTPAID_BY_HOUR"
 	DiskChargeTypeCdcPaid        = "CDCPAID"
 
-	DiskChargeTypeDefault = DiskChargeTypePostPaidByHour
-
-	// cbs disk charge prepaid options
-	DiskChargePrepaidPeriodAttr = "diskChargeTypePrepaidPeriod"
-
-	DiskChargePrepaidPeriodDefault = 1
-
 	DiskChargePrepaidRenewFlagNotifyAndAutoRenew          = "NOTIFY_AND_AUTO_RENEW"
-	DiskChargePrepaidRenewFlagNotifyAndManualRenewd       = "NOTIFY_AND_MANUAL_RENEW"
+	DiskChargePrepaidRenewFlagNotifyAndManualRenew        = "NOTIFY_AND_MANUAL_RENEW"
 	DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew = "DISABLE_NOTIFY_AND_MANUAL_RENEW"
 
-	DiskChargePrepaidRenewFlagDefault = DiskChargePrepaidRenewFlagNotifyAndManualRenewd
-
-	// cbs disk zone
-	DiskZone = "diskZone"
-
-	// cbs disk zones
-	DiskZones = "diskZones"
-
-	TKESERVICETYPE    = "ccs"
-	TKERESOURCEPREFIX = "cluster"
-
+	TKESERVICETYPE          = "ccs"
+	TKERESOURCEPREFIX       = "cluster"
 	TagForDeletionCreateBy  = "tke-cbs-provisioner-createBy-flag"
 	TagForDeletionClusterId = "tke-clusterId"
 
-	// cbs status
 	StatusUnattached = "UNATTACHED"
 	StatusAttached   = "ATTACHED"
 	StatusExpanding  = "EXPANDING"
@@ -77,30 +56,26 @@ const (
 	CXMNodeIDPrefix  = "eks-"
 	NodeIDLength     = 12
 
-	CbsUrl     = "cbs.internal.tencentcloudapi.com"
-	CvmUrl     = "cvm.internal.tencentcloudapi.com"
-	TagUrl     = "tag.internal.tencentcloudapi.com"
-	CbsTestUrl = "cbs.test.tencentcloudapi.com"
-	CvmTestUrl = "cvm.test.tencentcloudapi.com"
-	TagTestUrl = "tag.test.tencentcloudapi.com"
+	dmDefaultDevices = 2
+
+	cbsUrl     = "cbs.internal.tencentcloudapi.com"
+	cvmUrl     = "cvm.internal.tencentcloudapi.com"
+	tagUrl     = "tag.internal.tencentcloudapi.com"
+	cbsTestUrl = "cbs.test.tencentcloudapi.com"
+	cvmTestUrl = "cvm.test.tencentcloudapi.com"
+	tagTestUrl = "tag.test.tencentcloudapi.com"
 )
 
 var (
-	// cbs disk encrypt
-	EncryptAttr   = "encrypt"
-	EncryptEnable = "ENCRYPT"
-
+	EncryptAttr     = "encrypt"
+	EncryptEnable   = "ENCRYPT"
 	CXMInstanceType = "eks"
 
 	DiskChargePrepaidPeriodValidValues = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24, 36}
 
-	// volumeCaps represents how the volume could be accessed.
-	// It is SINGLE_NODE_WRITER since EBS volume could only be
-	// attached to a single node at any given time.
-	volumeCaps = []csi.VolumeCapability_AccessMode{
-		{
-			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-		},
+	cbsSnapshotsMapsCache = &cbsSnapshotsCache{
+		mux:             &sync.Mutex{},
+		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
 	}
 
 	// controllerCaps represents the capability of controller service
@@ -110,11 +85,6 @@ var (
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 	}
-
-	cbsSnapshotsMapsCache = &cbsSnapshotsCache{
-		mux:             &sync.Mutex{},
-		cbsSnapshotMaps: make(map[string]*cbsSnapshot),
-	}
 )
 
 type cbsController struct {
@@ -123,9 +93,10 @@ type cbsController struct {
 	tagClient     *tag.Client
 	metadataStore util.CachePersister
 
-	zone      string
-	region    string
-	clusterId string
+	zone              string
+	region            string
+	clusterId         string
+	cleanDevicemapper bool
 }
 
 func newCbsController(drv *Driver) *cbsController {
@@ -136,38 +107,39 @@ func newCbsController(drv *Driver) *cbsController {
 		Token:     token,
 	}
 
-	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = CbsUrl
+	cbsCpf := profile.NewClientProfile()
+	cbsCpf.HttpProfile.Endpoint = cbsUrl
 
-	cvmcpf := profile.NewClientProfile()
-	cvmcpf.HttpProfile.Endpoint = CvmUrl
+	cvmCpf := profile.NewClientProfile()
+	cvmCpf.HttpProfile.Endpoint = cvmUrl
 
 	tagCpf := profile.NewClientProfile()
 	tagCpf.Language = "en-US"
-	tagCpf.HttpProfile.Endpoint = TagUrl
+	tagCpf.HttpProfile.Endpoint = tagUrl
 
 	if drv.environmentType == "test" {
-		cpf.HttpProfile.Endpoint = CbsTestUrl
-		cvmcpf.HttpProfile.Endpoint = CvmTestUrl
-		tagCpf.HttpProfile.Endpoint = TagTestUrl
+		cbsCpf.HttpProfile.Endpoint = cbsTestUrl
+		cvmCpf.HttpProfile.Endpoint = cvmTestUrl
+		tagCpf.HttpProfile.Endpoint = tagTestUrl
 	}
 
 	if drv.cbsUrl != "" {
-		cpf.HttpProfile.Endpoint = drv.cbsUrl
+		cbsCpf.HttpProfile.Endpoint = drv.cbsUrl
 	}
 
-	client, _ := cbs.NewClient(cred, drv.region, cpf)
-	cvmClient, _ := cvm.NewClient(cred, drv.region, cvmcpf)
+	cbsClient, _ := cbs.NewClient(cred, drv.region, cbsCpf)
+	cvmClient, _ := cvm.NewClient(cred, drv.region, cvmCpf)
 	tagClient, _ := tag.NewClient(cred, drv.region, tagCpf)
 
 	return &cbsController{
-		cbsClient:     client,
-		cvmClient:     cvmClient,
-		tagClient:     tagClient,
-		zone:          drv.zone,
-		region:        drv.region,
-		clusterId:     drv.clusterId,
-		metadataStore: drv.metadataStore,
+		cbsClient:         cbsClient,
+		cvmClient:         cvmClient,
+		tagClient:         tagClient,
+		zone:              drv.zone,
+		region:            drv.region,
+		clusterId:         drv.clusterId,
+		metadataStore:     drv.metadataStore,
+		cleanDevicemapper: drv.cleanDevicemapper,
 	}
 }
 
@@ -175,22 +147,18 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume name is empty")
 	}
-
-	volumeIdempotencyName := req.Name
-	volumeCapacity := req.CapacityRange.RequiredBytes
-
 	if len(req.VolumeCapabilities) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "volume has no capabilities")
 	}
-
 	for _, c := range req.VolumeCapabilities {
-		if c.GetBlock() != nil {
-			return nil, status.Error(codes.InvalidArgument, "block volume is not supported")
-		}
 		if c.AccessMode.Mode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
-			return nil, status.Error(codes.InvalidArgument, "block access mode only support singer node writer")
+			return nil, status.Error(codes.InvalidArgument, "cbs access mode only support singer node writer")
 		}
 	}
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
+
+	volumeIdempotencyName := req.Name
+	volumeCapacity := req.CapacityRange.RequiredBytes
 
 	volumeTags := make(map[string]string)
 	if ctrl.clusterId != "" {
@@ -198,13 +166,14 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		volumeTags[TagForDeletionClusterId] = ctrl.clusterId
 	}
 
-	var aspId, volumeZone, cdcId string
-	inputVolumeType := DiskTypeDefault
-	volumeChargeType := DiskChargeTypeDefault
-	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagDefault
+	var aspId, volumeZone, cdcId, devicemapper string
+	var projectId, throughputPerformance int
+	var err error
+	inputVolumeType := DiskTypeCloudPremium
+	volumeChargeType := DiskChargeTypePostPaidByHour
+	volumeChargePrepaidRenewFlag := DiskChargePrepaidRenewFlagNotifyAndManualRenew
 	volumeChargePrepaidPeriod := 1
-	projectId := 0
-	throughputPerformance := 0
+	devices := 1
 	for k, v := range req.Parameters {
 		switch strings.ToLower(k) {
 		case "aspid":
@@ -218,62 +187,75 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		case "renewflag", "diskchargeprepaidrenewflag":
 			volumeChargePrepaidRenewFlag = v
 		case "diskchargetypeprepaidperiod":
-			var err error
 			volumeChargePrepaidPeriod, err = strconv.Atoi(v)
 			if err != nil {
-				glog.Infof("volumeChargePrepaidPeriod atoi error: %v", err)
+				glog.Warningf("volumeChargePrepaidPeriod atoi error: %v", err)
 			}
 		case "project":
-			var err error
 			projectId, err = strconv.Atoi(v)
 			if err != nil {
-				glog.Infof("projectId atoi error: %v", err)
+				glog.Warningf("projectId atoi error: %v", err)
 			}
 		case "disktags":
-			tags := strings.Split(v, ",")
-			for _, tag := range tags {
-				kv := strings.Split(tag, ":")
+			diskTags := strings.Split(v, ",")
+			for _, diskTag := range diskTags {
+				kv := strings.Split(diskTag, ":")
 				if kv == nil || len(kv) != 2 {
 					continue
 				}
 				volumeTags[kv[0]] = kv[1]
 			}
 		case "throughputperformance":
-			var err error
 			throughputPerformance, err = strconv.Atoi(v)
 			if err != nil {
-				glog.Infof("throughputPerformance atoi error: %v", err)
+				glog.Warningf("throughputPerformance atoi error: %v", err)
 			}
 		case "cdcid":
 			cdcId = v
 			volumeChargeType = DiskChargeTypeCdcPaid
+		case "devicemapper":
+			devicemapper = v
+		case "devices":
+			devices, err = strconv.Atoi(v)
+			if err != nil {
+				glog.Warningf("volumeChargePrepaidPeriod atoi error: %v", err)
+			}
+			if devices <= 0 {
+				return nil, status.Errorf(codes.InvalidArgument, "devices %v is invalid", devices)
+			}
 		default:
 		}
 	}
 
-	//zone parameters
-	// volumeZone, ok := req.Parameters[DiskZone]
-	// volumeZones, ok2 := req.Parameters[DiskZones]
-	// if ok1 && ok2 {
-	// 	return nil, status.Error(codes.InvalidArgument, "both zone and zones StorageClass parameters must not be used at the same time")
-	// }
-	glog.Infof("req.GetAccessibilityRequirements() is %v", req.GetAccessibilityRequirements())
+	InstanceId := pickAvailabilityInstance(req.GetAccessibilityRequirements())
+	if devicemapper != "" {
+		if devicemapper != "LVM" {
+			return nil, status.Errorf(codes.InvalidArgument, "devicemapper %s is unsupported", devicemapper)
+		}
+		if InstanceId == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "Can't find InstanceId in request, the volumeBindingMode of sc must set to `WaitForFirstConsumer` if use devicemapper")
+		}
+		if devices < dmDefaultDevices {
+			return nil, status.Errorf(codes.InvalidArgument, "devices can't less then 2 when devicemapper is %s", devicemapper)
+		}
+		glog.Infof("devicemapper %s enabled，devices: %v", devicemapper, devices)
+	} else if devices != 1 {
+		return nil, status.Error(codes.InvalidArgument, "devices must set to 1 when devicemapper is empty")
+	}
+
 	if volumeZone == "" {
 		volumeZone = pickAvailabilityZone(req.GetAccessibilityRequirements())
 	}
-	// TODO maybe we don't need this, controller plugin' node zone is not a property zone for pod.
 	if volumeZone == "" {
 		volumeZone = ctrl.zone
 	}
 
-	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
-	// If zone param not prefix with ap-,
 	glog.Infof("tencent zone: %v", volumeZone)
 	if !strings.HasPrefix(volumeZone, "ap-") {
 		request := cvm.NewDescribeZonesRequest()
 		response, err := ctrl.cvmClient.DescribeZones(request)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Tencent SDK API return error: %v", err.Error())
+			return nil, status.Errorf(codes.Internal, "cvm.DescribeZones failed, err: %v", err.Error())
 		}
 		for _, z := range response.Response.ZoneSet {
 			if *z.ZoneId == volumeZone {
@@ -291,53 +273,43 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 				found = true
 			}
 		}
-
 		if !found {
 			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "can not found valid prepaid period")
 		}
-
-		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenewd {
+		if volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagDisableNotifyAndManualRenew && volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndAutoRenew &&
+			volumeChargePrepaidRenewFlag != DiskChargePrepaidRenewFlagNotifyAndManualRenew {
 			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 			return nil, status.Error(codes.InvalidArgument, "invalid renew flag")
 		}
 	}
 
-	sizeGb := uint64(volumeCapacity / int64(GB))
-	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, sizeGb)
+	size := uint64(volumeCapacity / int64(GB))
+	volumeType, err := ctrl.validateDiskTypeAndSize(inputVolumeType, volumeZone, volumeChargeType, size)
 	if err != nil {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-
 	if volumeType == "" {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrDiskTypeNotAvaliable.Code).Inc()
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no available storage in zone: %s", volumeZone))
-	}
-
-	var size uint64
-	if sizeGb == sizeGb/10*10 {
-		size = uint64(sizeGb)
-	} else {
-		size = uint64(((sizeGb / 10) + 1) * 10)
 	}
 
 	volumeEncrypt, ok := req.Parameters[EncryptAttr]
 	if !ok {
 		volumeEncrypt = ""
 	}
-
 	if volumeEncrypt != "" && volumeEncrypt != EncryptEnable {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InvalidArgs)).Inc()
 		return nil, status.Error(codes.InvalidArgument, "volume encrypt not valid")
 	}
 
-	createCbsReq := cbs.NewCreateDisksRequest()
-
 	diskName := volumeIdempotencyName
 	if ctrl.clusterId != "" {
 		diskName = fmt.Sprintf("%s/%s", ctrl.clusterId, volumeIdempotencyName)
 	}
+
+	createCbsReq := cbs.NewCreateDisksRequest()
 	createCbsReq.DiskName = common.StringPtr(diskName)
 	createCbsReq.ClientToken = &volumeIdempotencyName
 	createCbsReq.DiskType = &volumeType
@@ -365,11 +337,11 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		Zone:      &volumeZone,
 		ProjectId: common.Uint64Ptr(uint64(projectId)),
 	}
+
 	if cdcId != "" {
 		createCbsReq.Placement.CdcId = &cdcId
 	}
 
-	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	snapshotId := ""
 	if req.VolumeContentSource != nil {
 		sTimeForDescribeSnapshots := time.Now()
@@ -385,7 +357,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 		listSnapshotRequest := cbs.NewDescribeSnapshotsRequest()
 		listSnapshotRequest.SnapshotIds = []*string{&snapshotId}
-
 		listSnapshotResponse, err := ctrl.cbsClient.DescribeSnapshots(listSnapshotRequest)
 		if err != nil {
 			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots), "", util.GetTencentSdkErrCode(err)).Inc()
@@ -394,7 +365,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots), "", string(util.Success)).Inc()
 		metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeSnapshots)).Observe(time.Since(sTimeForDescribeSnapshots).Seconds())
-
 		if len(listSnapshotResponse.Response.SnapshotSet) <= 0 {
 			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrSnapshotNotFound.Code).Inc()
 			return nil, status.Error(codes.NotFound, "Volume Snapshot not found")
@@ -419,17 +389,15 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	tagRequest.ResourceIds = common.StringPtrs([]string{ctrl.clusterId})
 	tagRequest.ResourceRegion = common.StringPtr(ctrl.region)
 	tagRequest.Limit = common.Uint64Ptr(100)
-
 	tagResp, err := ctrl.tagClient.DescribeResourceTagsByResourceIds(tagRequest)
 	if err != nil {
 		glog.Warningf("DescribeResourceTagsByResourceIds error %v", err)
 	} else if tagResp.Response != nil && len(tagResp.Response.Tags) > 0 {
 		glog.Infof("cluster %v's tags count is %v", ctrl.clusterId, *tagResp.Response.TotalCount)
-		for _, tag := range tagResp.Response.Tags {
-			volumeTags[*tag.TagKey] = *tag.TagValue
+		for _, clusterTag := range tagResp.Response.Tags {
+			volumeTags[*clusterTag.TagKey] = *clusterTag.TagValue
 		}
 	}
-
 	for k, v := range volumeTags {
 		key := k
 		value := v
@@ -439,7 +407,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		})
 	}
 
-	glog.Infof("createCbsReq: %+v", createCbsReq)
+	createCbsReq.DiskCount = common.Uint64Ptr(uint64(devices))
+
+	glog.Infof("createCbsReq: %s", createCbsReq.ToJsonString())
 	sTimeForCreateDisks := time.Now()
 	createCbsResponse, err := ctrl.cbsClient.CreateDisks(createCbsReq)
 	if err != nil {
@@ -450,36 +420,83 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.CreateDisks), "", string(util.Success)).Inc()
 	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.CreateDisks)).Observe(time.Since(sTimeForCreateDisks).Seconds())
 
-	if len(createCbsResponse.Response.DiskIdSet) <= 0 {
+	if len(createCbsResponse.Response.DiskIdSet) < devices {
 		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.InternalErr)).Inc()
-		return nil, status.Errorf(codes.Internal, "create disk failed, no disk id found in create disk response, request id %s", *createCbsResponse.Response.RequestId)
+		return nil, status.Errorf(codes.Internal, "create disk failed, not enough disk id found in create disk response, request id %s", *createCbsResponse.Response.RequestId)
 	}
 
-	diskId := *createCbsResponse.Response.DiskIdSet[0]
+	diskIds := createCbsResponse.Response.DiskIdSet
+	var diskIdsStr string
+	for idx, disk := range diskIds {
+		if idx == len(diskIds)-1 {
+			diskIdsStr += *disk
+		} else {
+			diskIdsStr += *disk + ","
+		}
+	}
+
+	createVolumeResponses := make(chan error, len(diskIds))
+	wg := &sync.WaitGroup{}
+	for _, diskId := range diskIds {
+		wg.Add(1)
+		go ctrl.createVolume(*diskId, aspId, createVolumeResponses, wg)
+	}
+	wg.Wait()
+
+	close(createVolumeResponses)
+	respErrs := make([]error, 0)
+	for r := range createVolumeResponses {
+		if r != nil {
+			respErrs = append(respErrs, r)
+		}
+	}
+	if len(respErrs) > 0 {
+		return nil, status.Errorf(codes.Aborted, "createVolume %s failed, err: %v", diskIdsStr, respErrs)
+	}
+
+	segments := make(map[string]string)
+	if devices >= dmDefaultDevices {
+		segments = map[string]string{
+			TopologyInstanceKey: InstanceId,
+		}
+	} else {
+		segments = map[string]string{
+			TopologyZoneKey: volumeZone,
+		}
+	}
+
+	return &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			CapacityBytes: volumeCapacity,
+			ContentSource: src,
+			VolumeId:      diskIdsStr,
+			VolumeContext: req.GetParameters(),
+			AccessibleTopology: []*csi.Topology{
+				{
+					Segments: segments,
+				},
+			},
+		},
+	}, nil
+}
+
+func (ctrl *cbsController) createVolume(diskId, aspId string, createVolumeResponses chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	disk := new(cbs.Disk)
-
 	ticker := time.NewTicker(time.Second * 5)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
 	for {
 		select {
 		case <-ticker.C:
-			sTimeForDescribeDisks := time.Now()
-			listCbsRequest := cbs.NewDescribeDisksRequest()
-			listCbsRequest.DiskIds = []*string{&diskId}
-
-			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+			describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, "", util.Provision)
 			if err != nil {
-				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
+				glog.Warningf("createVolume %s DescribeDisks failed, err: %v", diskId, err)
 				continue
 			}
-			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", string(util.Success)).Inc()
-			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTimeForDescribeDisks).Seconds())
-
-			if len(listCbsResponse.Response.DiskSet) >= 1 {
-				for _, d := range listCbsResponse.Response.DiskSet {
+			if len(describeDiskResponse.Response.DiskSet) >= 1 {
+				for _, d := range describeDiskResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
 						if *d.DiskState == StatusAttached || *d.DiskState == StatusUnattached {
 							disk = d
@@ -490,41 +507,27 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 								bindReq.DiskIds = []*string{disk.DiskId}
 								basp, err := ctrl.cbsClient.BindAutoSnapshotPolicy(bindReq)
 								if err != nil {
-									glog.Errorf("failed to bind snapshot policy, err: %v", err)
+									glog.Warningf("failed to bind snapshot policy, err: %v", err)
 								} else {
 									if basp.Response != nil && basp.Response.RequestId != nil {
-										glog.Infof("success bind disk %s to aspId: %s, the requesetID is %s", diskId, aspId, *basp.Response.RequestId)
+										glog.Infof("success bind disk %s to aspId: %s, the requestID is %s", diskId, aspId, *basp.Response.RequestId)
 									}
 
 								}
 							}
-
 							// record metric for create volume successfully
 							metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), string(util.Success)).Inc()
-
-							return &csi.CreateVolumeResponse{
-								Volume: &csi.Volume{
-									CapacityBytes: int64(*disk.DiskSize * GB),
-									ContentSource: src,
-									VolumeId:      *disk.DiskId,
-									VolumeContext: req.GetParameters(),
-									// TODO verify this topology
-									AccessibleTopology: []*csi.Topology{
-										{
-											Segments: map[string]string{
-												TopologyZoneKey: volumeZone,
-											},
-										},
-									},
-								},
-							}, nil
+							createVolumeResponses <- nil
+							return
 						}
 					}
+
 				}
 			}
 		case <-ctx.Done():
 			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Provision), util.ErrDiskCreatedTimeout.Code).Inc()
-			return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("cbs disk is not ready before deadline exceeded %s", diskId))
+			createVolumeResponses <- status.Error(codes.DeadlineExceeded, fmt.Sprintf("cbs disk %s is not ready before deadline exceeded", diskId))
+			return
 		}
 	}
 }
@@ -533,27 +536,34 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
-
-	sTime := time.Now()
-	describeDiskRequest := cbs.NewDescribeDisksRequest()
-	describeDiskRequest.DiskIds = []*string{&req.VolumeId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
-	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
+
+	diskIdList := make([]*string, 0)
+	for _, disk := range strings.Split(req.VolumeId, ",") {
+		if strings.HasPrefix(disk, "disk-") {
+			diskId := disk
+			diskIdList = append(diskIdList, &diskId)
+		}
+	}
+
+	describeDiskResponse, err := ctrl.describeDisks(diskIdList, "", util.Delete)
 	if err != nil {
-		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
-		metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Delete), util.GetTencentSdkErrCode(err)).Inc()
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", string(util.Success)).Inc()
-	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
-
 	if len(describeDiskResponse.Response.DiskSet) <= 0 {
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
+	if len(diskIdList) != 1 {
+		errs := ctrl.detachBeforeDeleteVolume(describeDiskResponse)
+		if len(errs) != 0 {
+			return nil, status.Errorf(codes.Aborted, "detachBeforeDeleteVolume %s failed, err: %v", req.VolumeId, errs)
+		}
+	}
+
 	sTimeForTerminateDisks := time.Now()
 	terminateCbsRequest := cbs.NewTerminateDisksRequest()
-	terminateCbsRequest.DiskIds = []*string{&req.VolumeId}
+	terminateCbsRequest.DiskIds = diskIdList
 	_, err = ctrl.cbsClient.TerminateDisks(terminateCbsRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.TerminateDisks), "", util.GetTencentSdkErrCode(err)).Inc()
@@ -567,6 +577,43 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
+func (ctrl *cbsController) detachBeforeDeleteVolume(describeDiskResponse *cbs.DescribeDisksResponse) []error {
+	needDetachDisks := make(map[string]string)
+	for _, disk := range describeDiskResponse.Response.DiskSet {
+		if disk.DiskState != nil {
+			if *disk.DiskState == StatusAttached {
+				needDetachDisks[*disk.DiskId] = *disk.InstanceId
+			}
+		}
+	}
+
+	if len(needDetachDisks) == 0 {
+		return nil
+	}
+
+	glog.Infof("detach before delete volume, needDetachDisks: %v", needDetachDisks)
+	detachVolumeResponses := make(chan error, len(needDetachDisks))
+	wg := &sync.WaitGroup{}
+	for diskId, instanceId := range needDetachDisks {
+		wg.Add(1)
+		go ctrl.detachVolume(diskId, instanceId, detachVolumeResponses, wg)
+	}
+	wg.Wait()
+
+	close(detachVolumeResponses)
+	respErrs := make([]error, 0)
+	for r := range detachVolumeResponses {
+		if r != nil {
+			respErrs = append(respErrs, r)
+		}
+	}
+	if len(respErrs) > 0 {
+		return respErrs
+	}
+
+	return nil
+}
+
 func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
@@ -574,44 +621,73 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	if req.NodeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "node id is empty")
 	}
-
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume has no capabilities")
 	}
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 
-	diskId := req.VolumeId
+	diskIds := req.VolumeId
 	instanceId := req.NodeId
 
 	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: attach disk %s to node %s, but the node's instanceType is unsupported.", diskId, instanceId)
+		return nil, status.Errorf(codes.Internal, "attach disk %s to node %s, but the node's instanceType is unsupported", diskIds, instanceId)
 	}
 
-	listCbsRequest := cbs.NewDescribeDisksRequest()
-	listCbsRequest.DiskIds = []*string{&diskId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
-	sTime := time.Now()
-	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+	diskIdList := make([]string, 0)
+	for _, disk := range strings.Split(diskIds, ",") {
+		if strings.HasPrefix(disk, "disk-") {
+			diskIdList = append(diskIdList, disk)
+		}
+	}
+	if len(diskIds) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "volume id %s is invalid", diskIds)
+	}
+
+	attachVolumeResponses := make(chan error, len(diskIdList))
+	wg := &sync.WaitGroup{}
+	for _, diskId := range diskIdList {
+		wg.Add(1)
+		go ctrl.attachVolume(diskId, req.NodeId, attachVolumeResponses, wg)
+	}
+	wg.Wait()
+
+	close(attachVolumeResponses)
+	respErrs := make([]error, 0)
+	for r := range attachVolumeResponses {
+		if r != nil {
+			respErrs = append(respErrs, r)
+		}
+	}
+	if len(respErrs) > 0 {
+		return nil, status.Errorf(codes.Aborted, "attachVolume %s failed, err: %v", diskIds, respErrs)
+	}
+
+	return &csi.ControllerPublishVolumeResponse{}, nil
+}
+
+func (ctrl *cbsController) attachVolume(diskId, instanceId string, attachVolumeResponses chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, instanceId, util.Attach)
 	if err != nil {
-		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
-		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.GetTencentSdkErrCode(err)).Inc()
-		return nil, status.Error(codes.Internal, err.Error())
+		attachVolumeResponses <- status.Error(codes.Internal, err.Error())
+		return
 	}
-	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
-	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
-
-	if len(listCbsResponse.Response.DiskSet) <= 0 {
+	if len(describeDiskResponse.Response.DiskSet) <= 0 {
 		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskNotFound.Code).Inc()
-		return nil, status.Error(codes.NotFound, "disk not found")
+		attachVolumeResponses <- status.Errorf(codes.NotFound, "disk %s not found", diskId)
+		return
 	}
-
-	for _, disk := range listCbsResponse.Response.DiskSet {
+	for _, disk := range describeDiskResponse.Response.DiskSet {
 		if *disk.DiskId == diskId {
 			if *disk.DiskState == StatusAttached && *disk.InstanceId == instanceId {
-				return &csi.ControllerPublishVolumeResponse{}, nil
+				attachVolumeResponses <- nil
+				return
 			}
 			if *disk.DiskState == StatusAttached && *disk.InstanceId != instanceId {
 				metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskAttachedAlready.Code).Inc()
-				return nil, status.Error(codes.FailedPrecondition, "disk is attach to another instance already")
+				attachVolumeResponses <- status.Errorf(codes.FailedPrecondition, "disk %s is attach to another instance() already", diskId, *disk.InstanceId)
+				return
 			}
 		}
 	}
@@ -627,42 +703,38 @@ func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
 		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.GetTencentSdkErrCode(err)).Inc()
-		return nil, status.Error(codes.Internal, err.Error())
+		attachVolumeResponses <- status.Error(codes.Internal, err.Error())
+		return
 	}
 	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks), diskId, string(util.Success)).Inc()
 	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.AttachDisks)).Observe(time.Since(sTimeForAttachDisks).Seconds())
 
 	ticker := time.NewTicker(time.Second * 5)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-
 	for {
 		select {
 		case <-ticker.C:
-			listCbsRequest := cbs.NewDescribeDisksRequest()
-			listCbsRequest.DiskIds = []*string{&diskId}
-
-			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+			describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, instanceId, "")
 			if err != nil {
-				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+				glog.Warningf("attachVolume %s DescribeDisks failed, err: %v", diskId, err)
 				continue
 			}
-			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
-			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
 
-			if len(listCbsResponse.Response.DiskSet) >= 1 {
-				for _, d := range listCbsResponse.Response.DiskSet {
+			if len(describeDiskResponse.Response.DiskSet) >= 1 {
+				for _, d := range describeDiskResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
 						if *d.DiskState == StatusAttached {
-							return &csi.ControllerPublishVolumeResponse{}, nil
+							attachVolumeResponses <- nil
+							return
 						}
 					}
 				}
 			}
 		case <-ctx.Done():
 			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskAttachedTimeout.Code).Inc()
-			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not attached before deadline exceeded")
+			attachVolumeResponses <- status.Errorf(codes.DeadlineExceeded, "cbs disk %s is not attached before deadline exceeded", diskId)
+			return
 		}
 	}
 }
@@ -674,37 +746,71 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	if req.NodeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "node id is empty")
 	}
-
-	diskId := req.VolumeId
-
-	instanceId := req.NodeId
-	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
-		glog.Infof("ControllerUnpublishVolume: detach disk %s from node %s, but the node's instanceType is unsupported.", diskId, instanceId)
-		return &csi.ControllerUnpublishVolumeResponse{}, nil
-	}
-	listCbsRequest := cbs.NewDescribeDisksRequest()
-	listCbsRequest.DiskIds = []*string{&diskId}
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
-	sTime := time.Now()
-	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
-	if err != nil {
-		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
-		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.GetTencentSdkErrCode(err)).Inc()
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
-	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
 
-	if len(listCbsResponse.Response.DiskSet) <= 0 {
-		// return nil, status.Error(codes.NotFound, "disk not found")
-		glog.Warningf("ControllerUnpublishVolume: detach disk %s from node %s, but cbs disk does not exist; assuming the disk is detached", diskId, req.NodeId)
+	diskIds := req.VolumeId
+	instanceId := req.NodeId
+
+	if !((strings.HasPrefix(instanceId, CVMNodeIDPrefix) || strings.HasPrefix(instanceId, CXMNodeIDPrefix)) && len(instanceId) == NodeIDLength) {
+		glog.Infof("detach disk %s from node %s, but the node's instanceType is unsupported", diskIds, instanceId)
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
-	for _, disk := range listCbsResponse.Response.DiskSet {
+	diskIdList := make([]string, 0)
+	for _, disk := range strings.Split(diskIds, ",") {
+		if strings.HasPrefix(disk, "disk-") {
+			diskIdList = append(diskIdList, disk)
+		}
+	}
+	if len(diskIds) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "volume id %s is invalid", diskIds)
+	}
+
+	if len(diskIdList) > 1 && !ctrl.cleanDevicemapper {
+		glog.Infof("skip devicemapper clean for volume %s", diskIds)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
+
+	detachVolumeResponses := make(chan error, len(diskIdList))
+	wg := &sync.WaitGroup{}
+	for _, diskId := range diskIdList {
+		wg.Add(1)
+		go ctrl.detachVolume(diskId, req.NodeId, detachVolumeResponses, wg)
+	}
+	wg.Wait()
+
+	close(detachVolumeResponses)
+	respErrs := make([]error, 0)
+	for r := range detachVolumeResponses {
+		if r != nil {
+			respErrs = append(respErrs, r)
+		}
+	}
+	if len(respErrs) > 0 {
+		return nil, status.Errorf(codes.Aborted, "detachVolume %s failed, err: %v", diskIds, respErrs)
+	}
+
+	return &csi.ControllerUnpublishVolumeResponse{}, nil
+}
+
+func (ctrl *cbsController) detachVolume(diskId, instanceId string, detachVolumeResponses chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, instanceId, util.Detach)
+	if err != nil {
+		detachVolumeResponses <- status.Error(codes.Internal, err.Error())
+		return
+	}
+	if len(describeDiskResponse.Response.DiskSet) <= 0 {
+		glog.Warningf("detach disk %s from node %s, but cbs disk does not exist; assuming the disk is detached", diskId, instanceId)
+		detachVolumeResponses <- nil
+		return
+	}
+	for _, disk := range describeDiskResponse.Response.DiskSet {
 		if *disk.DiskId == diskId {
 			if *disk.DiskState == StatusUnattached {
-				return &csi.ControllerUnpublishVolumeResponse{}, nil
+				detachVolumeResponses <- nil
+				return
 			}
 		}
 	}
@@ -718,44 +824,38 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	_, err = ctrl.cbsClient.DetachDisks(detachDiskRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
-		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.GetTencentSdkErrCode(err)).Inc()
-		return nil, status.Error(codes.Aborted, err.Error())
+		metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, instanceId, util.GetTencentSdkErrCode(err)).Inc()
+		detachVolumeResponses <- status.Error(codes.Internal, err.Error())
+		return
 	}
 	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks), diskId, string(util.Success)).Inc()
 	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DetachDisks)).Observe(time.Since(sTimeForDetachDisks).Seconds())
 
 	ticker := time.NewTicker(time.Second * 5)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-
 	for {
 		select {
 		case <-ticker.C:
-			listCbsRequest := cbs.NewDescribeDisksRequest()
-			listCbsRequest.DiskIds = []*string{&diskId}
-			sTimeForDescribeDisks := time.Now()
-
-			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+			describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, instanceId, "")
 			if err != nil {
-				metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, util.GetTencentSdkErrCode(err)).Inc()
+				glog.Warningf("detachVolume %s DescribeDisks failed, err: %v", diskId, err)
 				continue
 			}
-			metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), diskId, string(util.Success)).Inc()
-			metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTimeForDescribeDisks).Seconds())
-
-			if len(listCbsResponse.Response.DiskSet) >= 1 {
-				for _, d := range listCbsResponse.Response.DiskSet {
+			if len(describeDiskResponse.Response.DiskSet) >= 1 {
+				for _, d := range describeDiskResponse.Response.DiskSet {
 					if *d.DiskId == diskId && d.DiskState != nil {
 						if *d.DiskState == StatusUnattached {
-							return &csi.ControllerUnpublishVolumeResponse{}, nil
+							detachVolumeResponses <- nil
+							return
 						}
 					}
 				}
 			}
 		case <-ctx.Done():
-			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, req.NodeId, util.ErrDiskDetachedTimeout.Code).Inc()
-			return nil, status.Error(codes.DeadlineExceeded, "cbs disk is not unattached before deadline exceeded")
+			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Detach), diskId, instanceId, util.ErrDiskDetachedTimeout.Code).Inc()
+			detachVolumeResponses <- status.Errorf(codes.DeadlineExceeded, "cbs disk %s is not unattached before deadline exceeded", diskId)
+			return
 		}
 	}
 }
@@ -763,11 +863,11 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 func (ctrl *cbsController) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	glog.Infof("ControllerGetCapabilities: called with args %+v", *req)
 	var caps []*csi.ControllerServiceCapability
-	for _, cap := range controllerCaps {
+	for _, controllerCap := range controllerCaps {
 		c := &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: cap,
+					Type: controllerCap,
 				},
 			},
 		}
@@ -785,81 +885,109 @@ func (ctrl *cbsController) ListVolumes(context.Context, *csi.ListVolumesRequest)
 }
 
 func (ctrl *cbsController) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	glog.Infof("ControllerExpandVolume: ControllerExpandVolumeRequest is %v", *req)
-
-	volumeID := req.GetVolumeId()
-	if len(volumeID) == 0 {
+	if req.GetVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
-
-	capacityRange := req.GetCapacityRange()
-	if capacityRange == nil {
+	if req.GetCapacityRange() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
 	}
+	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 
-	newCbsSizeGB := util.RoundUpGiB(capacityRange.GetRequiredBytes())
+	newCbsSizeGB := util.RoundUpGiB(req.GetCapacityRange().GetRequiredBytes())
 
-	diskId := req.VolumeId
+	diskIds := req.VolumeId
+	diskIdList := make([]string, 0)
+	for _, disk := range strings.Split(diskIds, ",") {
+		if strings.HasPrefix(disk, "disk-") {
+			diskIdList = append(diskIdList, disk)
+		}
+	}
+	if len(diskIds) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "volume id %s is invalid", diskIds)
+	}
+
+	expandVolumeResponse := make(chan error, len(diskIdList))
+	wg := &sync.WaitGroup{}
+	for _, diskId := range diskIdList {
+		wg.Add(1)
+		go ctrl.expandVolume(diskId, newCbsSizeGB, expandVolumeResponse, wg)
+	}
+	wg.Wait()
+
+	close(expandVolumeResponse)
+	respErrs := make([]error, 0)
+	for r := range expandVolumeResponse {
+		if r != nil {
+			respErrs = append(respErrs, r)
+		}
+	}
+	if len(respErrs) > 0 {
+		return nil, status.Errorf(codes.Aborted, "expandVolume %s failed, err: %v", diskIds, respErrs)
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         util.GiBToBytes(newCbsSizeGB),
+		NodeExpansionRequired: true,
+	}, nil
+}
+
+func (ctrl *cbsController) expandVolume(diskId string, newCbsSizeGB int64, expandVolumeResponse chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	// check size
-	listCbsRequest := cbs.NewDescribeDisksRequest()
-	listCbsRequest.DiskIds = []*string{&diskId}
-	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
-	listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+	describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, "", "")
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		expandVolumeResponse <- status.Error(codes.Internal, err.Error())
+		return
 	}
 
-	if len(listCbsResponse.Response.DiskSet) <= 0 {
-		return nil, status.Errorf(codes.NotFound, "Disk %s not found", diskId)
+	if len(describeDiskResponse.Response.DiskSet) <= 0 {
+		expandVolumeResponse <- status.Errorf(codes.NotFound, "disk %s not found", diskId)
+		return
 	}
 
-	for _, disk := range listCbsResponse.Response.DiskSet {
+	for _, disk := range describeDiskResponse.Response.DiskSet {
 		if *disk.DiskId == diskId {
 			if uint64(newCbsSizeGB) <= *disk.DiskSize {
-				glog.Infof("Request size %v is less than *disk.DiskSize %v", newCbsSizeGB, *disk.DiskSize)
-				return &csi.ControllerExpandVolumeResponse{
-					CapacityBytes:         util.GiBToBytes(int64(*disk.DiskSize)),
-					NodeExpansionRequired: true,
-				}, nil
+				glog.Infof("request size %v is less than diskSize %v, disk %s", newCbsSizeGB, *disk.DiskSize, diskId)
+				expandVolumeResponse <- nil
+				return
 			}
 		}
 	}
+
 	//expand cbs
 	resizeRequest := cbs.NewResizeDiskRequest()
 	resizeRequest.DiskId = common.StringPtr(diskId)
 	resizeRequest.DiskSize = common.Uint64Ptr(uint64(newCbsSizeGB))
-
 	_, err = ctrl.cbsClient.ResizeDisk(resizeRequest)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		expandVolumeResponse <- status.Error(codes.Internal, err.Error())
+		return
 	}
 
 	ticker := time.NewTicker(time.Second * 3)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-
 	for {
 		select {
 		case <-ticker.C:
-			listCbsResponse, err := ctrl.cbsClient.DescribeDisks(listCbsRequest)
+			describeDiskResponse, err := ctrl.describeDisks([]*string{&diskId}, "", "")
 			if err != nil {
-				glog.Infof("DescribeDisks failed %v", err)
+				glog.Warningf("expandVolume %s DescribeDisks failed, err: %v", diskId, err)
 				continue
 			}
-			for _, d := range listCbsResponse.Response.DiskSet {
+			for _, d := range describeDiskResponse.Response.DiskSet {
 				if *d.DiskId == diskId && d.DiskState != nil {
 					if *d.DiskState != StatusExpanding {
-						return &csi.ControllerExpandVolumeResponse{
-							CapacityBytes:         util.GiBToBytes(newCbsSizeGB),
-							NodeExpansionRequired: true,
-						}, nil
+						expandVolumeResponse <- nil
+						return
 					}
 				}
 			}
 		case <-ctx.Done():
-			return nil, status.Errorf(codes.DeadlineExceeded, "Cbs disk %s is not expanded before deadline exceeded", diskId)
+			expandVolumeResponse <- status.Errorf(codes.DeadlineExceeded, "cbs disk %s is not expanded before deadline exceeded", diskId)
+			return
 		}
 	}
 }
@@ -873,6 +1001,10 @@ func (ctrl *cbsController) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		return nil, err
 	}
 	sourceVolumeId := req.GetSourceVolumeId()
+	if strings.Contains(sourceVolumeId, ",") {
+		return nil, status.Error(codes.Internal, "create snapshot for devicemapper is unsupported")
+	}
+
 	snapshotName := req.GetName()
 	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 
@@ -1022,27 +1154,8 @@ func (ctrl *cbsController) ListSnapshots(context.Context, *csi.ListSnapshotsRequ
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
-func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
-	if requirement == nil {
-		return ""
-	}
-	for _, topology := range requirement.GetPreferred() {
-		zone, exists := topology.GetSegments()[TopologyZoneKey]
-		if exists {
-			return zone
-		}
-	}
-	for _, topology := range requirement.GetRequisite() {
-		zone, exists := topology.GetSegments()[TopologyZoneKey]
-		if exists {
-			return zone
-		}
-	}
-	return ""
-}
-
 func (ctrl *cbsController) validateSnapshotReq(req *csi.CreateSnapshotRequest) error {
-	// Check sanity of request Snapshot Name, Source Volume Id
+	// Check sanity of request Snapshot Name, Source Volume ID
 	if len(req.Name) == 0 {
 		return status.Error(codes.InvalidArgument, "Snapshot Name cannot be empty")
 	}
@@ -1072,7 +1185,6 @@ func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode 
 	diskQuotaRequest.InquiryType = common.StringPtr("INQUIRY_CBS_CONFIG")
 	diskQuotaRequest.Zones = common.StringPtrs([]string{zone})
 	diskQuotaRequest.DiskChargeType = common.StringPtr(paymode)
-	updateClient(ctrl.cbsClient, ctrl.cvmClient, ctrl.tagClient)
 	diskQuotaResp, err := ctrl.cbsClient.DescribeDiskConfigQuota(diskQuotaRequest)
 	if err != nil {
 		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDiskQuota), "", util.GetTencentSdkErrCode(err)).Inc()
@@ -1087,6 +1199,68 @@ func (ctrl *cbsController) validateDiskTypeAndSize(inputDiskType, zone, paymode 
 	}
 
 	return verifyDiskTypeIsSupported(inputDiskType, diskSize, diskQuotaResp)
+}
+
+func (ctrl *cbsController) describeDisks(diskIds []*string, instanceId string, action util.PvcAction) (*cbs.DescribeDisksResponse, error) {
+	describeDiskRequest := cbs.NewDescribeDisksRequest()
+	describeDiskRequest.DiskIds = diskIds
+	sTime := time.Now()
+	describeDiskResponse, err := ctrl.cbsClient.DescribeDisks(describeDiskRequest)
+	if err != nil {
+		metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", util.GetTencentSdkErrCode(err)).Inc()
+		switch action {
+		case util.Provision, util.Delete:
+			metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(action), util.GetTencentSdkErrCode(err)).Inc()
+		case util.Attach, util.Detach:
+			metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(action), *diskIds[0], instanceId, util.GetTencentSdkErrCode(err)).Inc()
+		default:
+		}
+		return nil, err
+	}
+	metrics.YunApiRequestTotal.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks), "", string(util.Success)).Inc()
+	metrics.YunApiRequestCostSeconds.WithLabelValues(DriverName, string(util.CBS), string(util.DescribeDisks)).Observe(time.Since(sTime).Seconds())
+
+	return describeDiskResponse, nil
+}
+
+func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
+	if requirement == nil {
+		return ""
+	}
+	for _, topology := range requirement.GetPreferred() {
+		zone, exists := topology.GetSegments()[TopologyZoneKey]
+		if exists {
+			return zone
+		}
+	}
+	for _, topology := range requirement.GetRequisite() {
+		zone, exists := topology.GetSegments()[TopologyZoneKey]
+		if exists {
+			return zone
+		}
+	}
+	return ""
+}
+
+func pickAvailabilityInstance(requirement *csi.TopologyRequirement) string {
+	if requirement == nil {
+		return ""
+	}
+
+	for _, topology := range requirement.GetPreferred() {
+		nodeID, exists := topology.GetSegments()[TopologyInstanceKey]
+		if exists {
+			return nodeID
+		}
+	}
+	for _, topology := range requirement.GetRequisite() {
+		nodeID, exists := topology.GetSegments()[TopologyInstanceKey]
+		if exists {
+			return nodeID
+		}
+	}
+
+	return ""
 }
 
 func getDiskTypeForDefaultStorageClass(diskSize uint64, diskQuotaResp *cbs.DescribeDiskConfigQuotaResponse) (string, error) {

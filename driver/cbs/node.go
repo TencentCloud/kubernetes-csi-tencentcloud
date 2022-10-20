@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,7 @@ type cbsNode struct {
 	zone              string
 	nodeID            string
 	volumeAttachLimit int64
+	cleanDevicemapper bool
 }
 
 func newCbsNode(drv *Driver) *cbsNode {
@@ -71,12 +73,11 @@ func newCbsNode(drv *Driver) *cbsNode {
 		zone:              drv.zone,
 		nodeID:            drv.nodeID,
 		volumeAttachLimit: drv.volumeAttachLimit,
+		cleanDevicemapper: drv.cleanDevicemapper,
 	}
 }
 
 func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	glog.Infof("NodeStageVolume: start with args %v", *req)
-
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
@@ -86,15 +87,10 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	if req.VolumeCapability == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume has no capabilities")
 	}
-	// cbs is not support rawblock currently
-	if req.VolumeCapability.GetMount() == nil {
-		return nil, status.Error(codes.InvalidArgument, "volume access type is not mount")
-	}
 
 	// 1. check if current req is in progress.
 	if ok := node.idempotent.Insert(req); !ok {
-		msg := fmt.Sprintf("volume %v is in progress", req.VolumeId)
-		return nil, status.Error(codes.Internal, msg)
+		return nil, status.Errorf(codes.Internal, "volume %v is in progress", req.VolumeId)
 	}
 
 	defer func() {
@@ -103,58 +99,90 @@ func (node *cbsNode) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	}()
 
 	diskID := req.VolumeId
-
 	stagingTargetPath := req.StagingTargetPath
+	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
-	mountFlags := req.VolumeCapability.GetMount().MountFlags
-	mountFsType := req.VolumeCapability.GetMount().FsType
+	isBlock := req.GetVolumeCapability().GetBlock() != nil
+	if isBlock {
+		stagingTargetPath = filepath.Join(stagingTargetPath, req.VolumeId)
+	}
 
-	if _, err := os.Stat(stagingTargetPath); err != nil {
-		if os.IsNotExist(err) {
-			err := os.MkdirAll(stagingTargetPath, 0750)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-		} else {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
+	err := createMountPoint(stagingTargetPath, isBlock)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "createMountPoint failed, err: %v", err)
 	}
 
 	//2. check target path mounted
-	diskSource, err := findCBSVolume(diskID)
-	if err != nil {
-		glog.Infof("NodeStageVolume: findCBSVolume error cbs disk=%v, error %v", filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID), err)
-		return nil, status.Error(codes.Internal, err.Error())
+	var diskSource string
+	devicemapper := ""
+	if v, ok := req.VolumeContext["devicemapper"]; ok {
+		devicemapper = v
 	}
 
-	device, _, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
-	if err != nil {
-		glog.Errorf("NodeStageVolume: GetDeviceNameFromMount error %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
+	switch devicemapper {
+	case "RAID":
+		diskSource, err = mdadmCreate(diskID, req)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "mdadmCreate failed, err: %v", err)
+		}
+	case "LVM":
+		diskSource, err = lvmCreate(diskID, req)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "lvmCreate failed, err: %v", err)
+		}
+	case "CRYPT":
+		//TODO
+	default:
+		diskSource, err = findCBSVolume(diskID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "findCBSVolume error cbs disk=%v, error %v", filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID), err)
+		}
+
+		if isBlock {
+			notMnt, err := node.mounter.IsLikelyNotMountPoint(stagingTargetPath)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					return nil, status.Error(codes.NotFound, err.Error())
+				}
+			}
+			if notMnt {
+				mountFlags = append(mountFlags, "bind")
+				err = node.mounter.Mount(diskSource, stagingTargetPath, "", mountFlags)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Mount failed, diskSource: %s, stagingTargetPath: %s, err: %v", diskSource, stagingTargetPath, err)
+				}
+			}
+			return &csi.NodeStageVolumeResponse{}, nil
+		}
+
+		device, _, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "GetDeviceNameFromMount failed, err: %v", err)
+		}
+		if diskSource == device || filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID) == device {
+			glog.Infof("NodeStageVolume: volume %s is already staged", diskID)
+			return &csi.NodeStageVolumeResponse{}, nil
+		}
 	}
-	if diskSource == device || filepath.Join(DiskByIDDevicePath, DiskByIDDeviceNamePrefix+diskID) == device {
-		glog.Infof("NodeStageVolume: volume %v already staged", diskID)
-		return &csi.NodeStageVolumeResponse{}, nil
+
+	mountFsType := req.GetVolumeCapability().GetMount().GetFsType()
+	if mountFsType == "xfs" {
+		mountFlags = append(mountFlags, "nouuid")
 	}
 
 	if err := node.mounter.FormatAndMount(diskSource, stagingTargetPath, mountFsType, mountFlags); err != nil {
-		glog.Errorf(
-			"NodeStageVolume: FormatAndMount error diskSource %v stagingTargetPath %v, error %v",
-			diskSource, stagingTargetPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "FormatAndMount failed, diskSource: %s, stagingTargetPath: %s, err: %v", diskSource, stagingTargetPath, err)
 	}
 
 	r := resizefs.NewResizeFs(&node.mounter)
 	if _, err := r.Resize(diskSource, stagingTargetPath); err != nil && !isNotSupport(err) {
-		return nil, status.Errorf(codes.Internal, "NodeStageVolume: could not resize volume %v (%v):  %v", diskSource, stagingTargetPath, err)
+		return nil, status.Errorf(codes.Internal, "NodeStageVolume: Resize failed, diskSource: %s, stagingTargetPath: %s, err: %v", diskSource, stagingTargetPath, err)
 	}
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	glog.Infof("NodeUnstageVolume: start with args %v", *req)
-
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume staging target path is empty")
 	}
@@ -162,13 +190,33 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		return nil, status.Error(codes.InvalidArgument, "volume id is empty")
 	}
 
+	diskIds := req.VolumeId
 	stagingTargetPath := req.StagingTargetPath
+
+	tmpPath := filepath.Join(req.StagingTargetPath, diskIds)
+	notMnt, err := node.mounter.IsLikelyNotMountPoint(tmpPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		notMnt = true
+	}
+	if !notMnt {
+		if err = node.mounter.Unmount(tmpPath); err != nil {
+			return nil, status.Errorf(codes.Internal, "Unmount %s failed, err: %v", tmpPath, err)
+		}
+		if err = os.Remove(tmpPath); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, status.Errorf(codes.Internal, "Remove %s failed, err: %v", tmpPath, err)
+			}
+		}
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
 
 	_, refCount, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
 	fmt.Printf("refCount is %v", refCount)
 	if err != nil {
-		glog.Errorf("NodeUnstageVolume: GetDeviceNameFromMount error %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "GetDeviceNameFromMount %s failed, err: %v", stagingTargetPath, err)
 	}
 	if refCount == 0 {
 		glog.Infof("NodeUnstageVolume: %v is not mounted", stagingTargetPath)
@@ -176,8 +224,30 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	}
 
 	if err := node.mounter.Unmount(stagingTargetPath); err != nil {
-		glog.Errorf("NodeUnstageVolume: Unmount %v error %v", stagingTargetPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "Unmount %s failed, err: %v", stagingTargetPath, err)
+	}
+
+	if strings.Contains(diskIds, ",") {
+		if !node.cleanDevicemapper {
+			glog.Infof("NodeUnstageVolume: skip devicemapper clean for volume %s", diskIds)
+			return &csi.NodeUnstageVolumeResponse{}, nil
+		}
+
+		// TODO, we hard code lvm here to support lvm only, and add a flag in the volumeId such as 'lvm,disk-xxx,disk-yyy' to support raid.
+		deviceMapper := "LVM"
+		glog.Infof("devicemapper raid/lvm enabled, should clean raid/lvm config")
+		switch deviceMapper {
+		case "RAID":
+			err := mdadmDelete(diskIds, stagingTargetPath)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "mdadmDelete failed, err: %v", err)
+			}
+		case "LVM":
+			err = lvmDelete(stagingTargetPath)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "lvmDelete failed, err: %v", err)
+			}
+		}
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -199,48 +269,52 @@ func (node *cbsNode) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		return nil, status.Error(codes.InvalidArgument, "volume has no capabilities")
 	}
 
-	if req.VolumeCapability.GetMount() == nil {
-		return nil, status.Error(codes.InvalidArgument, "volume access type is not mount")
+	isBlock := req.GetVolumeCapability().GetBlock() != nil
+
+	target := req.TargetPath
+	source := req.StagingTargetPath
+	if isBlock {
+		source = filepath.Join(req.StagingTargetPath, req.VolumeId)
 	}
 
-	source := req.StagingTargetPath
-	target := req.TargetPath
-
-	mountFlags := req.VolumeCapability.GetMount().MountFlags
+	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 	mountFlags = append(mountFlags, "bind")
-
 	if req.Readonly {
 		mountFlags = append(mountFlags, "ro")
 	}
 
-	mountFsType := req.VolumeCapability.GetMount().FsType
-
+	mountFsType := req.GetVolumeCapability().GetMount().GetFsType()
 	if mountFsType == "" {
 		mountFsType = "ext4"
 	}
 
-	if err := node.checkStagingTargetPath(ctx, req); err != nil {
-		return nil, err
-	}
-
-	notMnt, err := node.mounter.IsLikelyNotMountPoint(target)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(target, 0750); err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-			notMnt = true
-		} else {
-			return nil, status.Error(codes.Internal, err.Error())
+	if !isBlock {
+		if err := node.checkStagingTargetPath(ctx, req); err != nil {
+			return nil, err
 		}
 	}
 
-	if !notMnt {
+	notMnt, err := node.mounter.IsLikelyNotMountPoint(target)
+	if err == nil && !notMnt {
 		glog.Infof("NodePublishVolume: TargetPath %s is already mounted, skipping", target)
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
+	if err != nil && !os.IsNotExist(err) {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 
-	if err := node.mounter.Mount(source, target, mountFsType, mountFlags); err != nil {
+	err = createMountPoint(target, isBlock)
+	if err != nil {
+		glog.Errorf("NodeStageVolume: createMountPoint error %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if isBlock {
+		err = node.mounter.Mount(source, target, "", mountFlags)
+	} else {
+		err = node.mounter.Mount(source, target, mountFsType, mountFlags)
+	}
+	if err != nil {
 		glog.Errorf("NodePublishVolume: Mount error target %v error %v", target, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -293,11 +367,11 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	glog.Infof("NodeGetCapabilities: called with args %+v", *req)
 	var caps []*csi.NodeServiceCapability
-	for _, cap := range nodeCaps {
+	for _, nodeCap := range nodeCaps {
 		c := &csi.NodeServiceCapability{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
-					Type: cap,
+					Type: nodeCap,
 				},
 			},
 		}
@@ -314,7 +388,8 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				TopologyZoneKey: node.zone,
+				TopologyZoneKey:     node.zone,
+				TopologyInstanceKey: node.nodeID,
 			},
 		},
 	}, nil
@@ -382,36 +457,46 @@ func (node *cbsNode) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVol
 }
 
 func (node *cbsNode) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	glog.Infof("NodeExpandVolume: NodeExpandVolumeRequest is %v", *req)
-
-	volumeID := req.GetVolumeId()
-	if volumeID == "" {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	diskIds := req.GetVolumeId()
+	if diskIds == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID not provided")
 	}
 	volumePath := req.GetVolumePath()
 	if volumePath == "" {
-		return nil, status.Error(codes.InvalidArgument, "Volume Path not provided")
+		return nil, status.Error(codes.InvalidArgument, "volume Path not provided")
+	}
+
+	if strings.Contains(volumePath, "volumeDevices") {
+		glog.Infof("NodeExpandVolume: skip block volume")
+		return &csi.NodeExpandVolumeResponse{}, nil
 	}
 
 	args := []string{"-o", "source", "--noheadings", "--target", volumePath}
 	output, err := node.mounter.Exec.Command("findmnt", args...).Output()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not determine device path: %v, raw block device or unmounted", err)
+		return nil, status.Errorf(codes.Internal, "could not determine device path: %v, raw block device or unmounted", err)
 	}
 
 	devicePath := strings.TrimSpace(string(output))
 	if len(devicePath) == 0 {
-		return nil, status.Errorf(codes.Internal, "Could not get valid device for mount path: %v", volumePath)
+		return nil, status.Errorf(codes.Internal, "could not get valid device for mount path: %v", volumePath)
 	}
 
-	err = checkVolumePathCapacity(devicePath, req.CapacityRange.RequiredBytes)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "check volumePath(%s) capacity failed, error: %v", volumePath, err)
+	if strings.Contains(diskIds, ",") {
+		err = lvmExpand(diskIds, devicePath, req.CapacityRange.RequiredBytes)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	} else {
+		err = checkVolumePathCapacity(devicePath, req.CapacityRange.RequiredBytes)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "check volumePath(%s) capacity failed, err: %v", volumePath, err)
+		}
 	}
 
 	r := resizefs.NewResizeFs(&node.mounter)
 	if _, err := r.Resize(devicePath, volumePath); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not resize volume %s %s: %v", volumeID, devicePath, err)
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume: Resize failed, devicePath %s, volumePath %s, err: %v", diskIds, devicePath, err)
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil
@@ -434,10 +519,17 @@ func (node *cbsNode) checkStagingTargetPath(ctx context.Context, req *csi.NodePu
 
 	if notMnt {
 		glog.Infof("Call NodeStageVolume to prepare the stagingTargetPath %s", stagingTargetPath)
+		volumeContext := make(map[string]string)
+		if strings.Contains(req.GetVolumeId(), ",") {
+			devices := len(strings.Split(req.GetVolumeId(), ","))
+			volumeContext["devicemapper"] = "LVM"
+			volumeContext["devices"] = strconv.Itoa(devices)
+		}
 		stageReq := &csi.NodeStageVolumeRequest{
 			VolumeId:          req.GetVolumeId(),
 			VolumeCapability:  req.GetVolumeCapability(),
 			StagingTargetPath: req.GetStagingTargetPath(),
+			VolumeContext:     volumeContext,
 		}
 		_, err = node.NodeStageVolume(ctx, stageReq)
 		if err != nil {
@@ -462,6 +554,9 @@ func (node *cbsNode) cleanIntreePath(targetPath, volumeId string) error {
 
 func (node *cbsNode) cleanIntreeTargetPath(targetPath string) error {
 	intreeTargetPath := convertToIntreeTargetPath(targetPath)
+	if intreeTargetPath == "" {
+		return nil
+	}
 
 	if pathExists, err := util.PathExists(intreeTargetPath); err != nil {
 		return err
@@ -479,6 +574,9 @@ func (node *cbsNode) cleanIntreeTargetPath(targetPath string) error {
 
 func (node *cbsNode) cleanIntreeStagingPath(targetPath, volumeId string) error {
 	intreeStagingPath := convertToIntreeStagingPath(targetPath, volumeId)
+	if intreeStagingPath == "" {
+		return nil
+	}
 
 	if pathExists, err := util.PathExists(intreeStagingPath); err != nil {
 		return err
@@ -500,6 +598,36 @@ func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
 	}
 
 	return int64(defaultMaxAttachVolumePerNode)
+}
+
+func createMountPoint(mountPath string, isBlock bool) error {
+	fi, err := os.Stat(mountPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if isBlock {
+		if err == nil && fi.IsDir() {
+			os.Remove(mountPath)
+		}
+		pathFile, err := os.OpenFile(mountPath, os.O_CREATE|os.O_RDWR, 0750)
+		if err != nil {
+			return err
+		}
+		if err = pathFile.Close(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(mountPath, 0750)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func isNotSupport(err error) bool {
@@ -578,8 +706,7 @@ func findCBSVolume(diskId string) (device string, err error) {
 			}
 
 			if err := os.Symlink(deviceFromSerial, p); err != nil {
-				glog.Errorf("Failed to link devicePathFromSerial(%s) and devicePathFromKubelet(%s): %v", deviceFromSerial, p, err)
-				return "", err
+				return "", fmt.Errorf("Failed to link devicePathFromSerial(%s) and devicePathFromKubelet(%s): %v ", deviceFromSerial, p, err)
 			}
 
 			glog.Infof("Successfully get device(%s) from serial(/sys/block/vdX/serail), and Symlink %s and %s", deviceFromSerial, deviceFromSerial, p)
@@ -589,7 +716,6 @@ func findCBSVolume(diskId string) (device string, err error) {
 	}
 
 	if stat.Mode()&os.ModeSymlink != os.ModeSymlink {
-		glog.Warningf("cbs block file %q found, but was not a symlink", p)
 		return "", fmt.Errorf("cbs block file %q found, but was not a symlink", p)
 	}
 	resolved, err := filepath.EvalSymlinks(p)
@@ -616,8 +742,7 @@ func getDevicePathsBySerial(diskId string) (string, error) {
 		if serialPathExist {
 			content, err := ioutil.ReadFile(serialPath)
 			if err != nil {
-				glog.Errorf("Failed to get diskId from serial path(%s): %v", serialPath, err)
-				return "", err
+				return "", fmt.Errorf("Failed to get diskId from serial path(%s): %v ", serialPath, err)
 			}
 
 			if strings.Trim(string(content), " ") == diskId {
@@ -627,7 +752,6 @@ func getDevicePathsBySerial(diskId string) (string, error) {
 		}
 	}
 
-	glog.Errorf("can not find diskId %v by serial", diskId)
 	return "", fmt.Errorf("can not find diskId %v by serial", diskId)
 }
 
@@ -652,7 +776,7 @@ func checkVolumePathCapacity(devicePath string, requiredBytes int64) error {
 	if err != nil {
 		return fmt.Errorf("seek to end of device %s failed, err: %s", devicePath, err)
 	}
-	if capacity != requiredBytes {
+	if capacity < requiredBytes {
 		return fmt.Errorf("device haven't resized, device: %v, required: %v", capacity, requiredBytes)
 	}
 	return nil
