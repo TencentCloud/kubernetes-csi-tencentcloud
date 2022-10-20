@@ -5,7 +5,7 @@ ADD . .
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -v -a -ldflags '-extldflags "-static"' -o csi-tencentcloud_${TARGETARCH} cmd/cbs/main.go
 
-FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:base.2
+FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:base.3
 
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud CBS CSI Plugin"

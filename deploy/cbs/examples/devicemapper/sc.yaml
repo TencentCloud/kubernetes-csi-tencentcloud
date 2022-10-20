@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cbs-device-mapper-lvm
+parameters:
+  devicemapper: LVM
+  devices: "2"
+  fstype: ext4
+provisioner: com.tencent.cloud.csi.cbs
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
