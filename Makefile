@@ -6,7 +6,7 @@ REGISTRY?=ccr.ccs.tencentyun.com/tkeimages
 # cbs image tag
 CBS_BASE?=base
 CBS_VERSION?=cbs
-CBS_MULTI_VERSION?=cbs-multi
+CBS_ARCH?=linux/amd64,linux/arm64
 
 # cfs image tag
 CFS_BASE?=base
@@ -32,14 +32,10 @@ all: cbs cfs cos cfsturbo chdfs
 
 cbs:
 	sed -i "s/v1.0.0/${CBS_VERSION}/g" driver/cbs/driver.go
-	docker build . --build-arg TARGETARCH=amd64 -f build/cbs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_VERSION}
-	docker push ${REGISTRY}/csi-tencentcloud-cbs:${CBS_VERSION}
-
-	sed -i "s/${CBS_VERSION}/${CBS_MULTI_VERSION}/g" driver/cbs/driver.go
-	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cbs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_MULTI_VERSION} --push
+	docker buildx build --platform ${CBS_ARCH} . -f build/cbs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_VERSION} --push
 
 cbs-base:
-	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cbs/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_BASE} --push
+	docker buildx build --platform ${CBS_ARCH} . -f build/cbs/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cbs:${CBS_BASE} --push
 
 cfs:
 	sed -i "s/v1.0.0/${CFS_VERSION}/g" driver/cfs/driver.go

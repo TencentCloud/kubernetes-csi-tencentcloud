@@ -51,7 +51,6 @@ type cbsNode struct {
 	zone              string
 	nodeID            string
 	volumeAttachLimit int64
-	cleanDevicemapper bool
 }
 
 func newCbsNode(drv *Driver) *cbsNode {
@@ -73,7 +72,6 @@ func newCbsNode(drv *Driver) *cbsNode {
 		zone:              drv.zone,
 		nodeID:            drv.nodeID,
 		volumeAttachLimit: drv.volumeAttachLimit,
-		cleanDevicemapper: drv.cleanDevicemapper,
 	}
 }
 
@@ -193,24 +191,26 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	diskIds := req.VolumeId
 	stagingTargetPath := req.StagingTargetPath
 
-	tmpPath := filepath.Join(req.StagingTargetPath, diskIds)
-	notMnt, err := node.mounter.IsLikelyNotMountPoint(tmpPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, err.Error())
-		}
-		notMnt = true
-	}
-	if !notMnt {
-		if err = node.mounter.Unmount(tmpPath); err != nil {
-			return nil, status.Errorf(codes.Internal, "Unmount %s failed, err: %v", tmpPath, err)
-		}
-		if err = os.Remove(tmpPath); err != nil {
+	if !strings.Contains(diskIds, ",") {
+		tmpPath := filepath.Join(req.StagingTargetPath, diskIds)
+		notMnt, err := node.mounter.IsLikelyNotMountPoint(tmpPath)
+		if err != nil {
 			if !os.IsNotExist(err) {
-				return nil, status.Errorf(codes.Internal, "Remove %s failed, err: %v", tmpPath, err)
+				return nil, status.Error(codes.NotFound, err.Error())
 			}
+			notMnt = true
 		}
-		return &csi.NodeUnstageVolumeResponse{}, nil
+		if !notMnt {
+			if err = node.mounter.Unmount(tmpPath); err != nil {
+				return nil, status.Errorf(codes.Internal, "Unmount %s failed, err: %v", tmpPath, err)
+			}
+			if err = os.Remove(tmpPath); err != nil {
+				if !os.IsNotExist(err) {
+					return nil, status.Errorf(codes.Internal, "Remove %s failed, err: %v", tmpPath, err)
+				}
+			}
+			return &csi.NodeUnstageVolumeResponse{}, nil
+		}
 	}
 
 	_, refCount, err := mount.GetDeviceNameFromMount(node.mounter, stagingTargetPath)
@@ -228,14 +228,9 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	}
 
 	if strings.Contains(diskIds, ",") {
-		if !node.cleanDevicemapper {
-			glog.Infof("NodeUnstageVolume: skip devicemapper clean for volume %s", diskIds)
-			return &csi.NodeUnstageVolumeResponse{}, nil
-		}
-
 		// TODO, we hard code lvm here to support lvm only, and add a flag in the volumeId such as 'lvm,disk-xxx,disk-yyy' to support raid.
 		deviceMapper := "LVM"
-		glog.Infof("devicemapper raid/lvm enabled, should clean raid/lvm config")
+		glog.Infof("devicemapper %s enabled, should clean %s config", deviceMapper, deviceMapper)
 		switch deviceMapper {
 		case "RAID":
 			err := mdadmDelete(diskIds, stagingTargetPath)
@@ -243,9 +238,9 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 				return nil, status.Errorf(codes.Internal, "mdadmDelete failed, err: %v", err)
 			}
 		case "LVM":
-			err = lvmDelete(stagingTargetPath)
+			err = lvmVgchange(stagingTargetPath, false)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "lvmDelete failed, err: %v", err)
+				return nil, status.Errorf(codes.Internal, "lvmVgchange failed, err: %v", err)
 			}
 		}
 	}
@@ -388,8 +383,7 @@ func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReques
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				TopologyZoneKey:     node.zone,
-				TopologyInstanceKey: node.nodeID,
+				TopologyZoneKey: node.zone,
 			},
 		},
 	}, nil
@@ -608,8 +602,10 @@ func createMountPoint(mountPath string, isBlock bool) error {
 
 	if isBlock {
 		if err == nil && fi.IsDir() {
+			// NOCA: TRAVERSAL(mountPath does not contains `..`)
 			os.Remove(mountPath)
 		}
+		// NOCA: TRAVERSAL(mountPath does not contains `..`)
 		pathFile, err := os.OpenFile(mountPath, os.O_CREATE|os.O_RDWR, 0750)
 		if err != nil {
 			return err
