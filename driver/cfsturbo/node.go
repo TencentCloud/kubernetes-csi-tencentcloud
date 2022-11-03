@@ -311,10 +311,8 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, err
 	}
 
-	// get global mount sub directory bind mount
-	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, fsidWithRootDir, opt.Path)
-
-	if _, err := os.Stat(targetPath); err != nil {
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
+	if err != nil {
 		if os.IsNotExist(err) {
 			err := os.MkdirAll(targetPath, 0750)
 			if err != nil {
@@ -324,7 +322,12 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
+	if !notMnt {
+		glog.Infof("NodePublishVolume: TargetPath %s is already mounted, skipping", targetPath)
+		return &csi.NodePublishVolumeResponse{}, nil
+	}
 
+	mountSource := fmt.Sprintf("%s/%s%s", cfsturboGlobalPath, fsidWithRootDir, opt.Path)
 	if err := ns.mounter.Mount(mountSource, targetPath, opt.Proto, mo); err != nil {
 		glog.Errorf("NodePublishVolume: Mount error target %v error %v", targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -340,23 +343,31 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if targetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "req.GetTargetPath() is empty")
 	}
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			glog.Infof("target path not exist, it's reasonable to assume that the `NodeUnpublishVolume` is successful.")
-			return &csi.NodeUnpublishVolumeResponse{}, nil
+
+	for n := 0; ; n++ {
+		notMnt, err := ns.mounter.IsLikelyNotMountPoint(targetPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				glog.Infof("target path not exist, it's reasonable to assume that the `NodeUnpublishVolume` is successful.")
+				return &csi.NodeUnpublishVolumeResponse{}, nil
+			}
+			return nil, status.Error(codes.Internal, err.Error())
 		}
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	if notMnt {
-		return &csi.NodeUnpublishVolumeResponse{}, nil
-	}
+		if notMnt {
+			if n == 0 {
+				glog.Infof("NodeUnpublishVolume: targetPath %v is already unmounted", targetPath)
+				return &csi.NodeUnpublishVolumeResponse{}, nil
+			}
+			glog.Infof("NodeUnpublishVolume: umount targetPath %v for %d times", targetPath, n)
+			break
+		}
 
-	if err := ns.mounter.Unmount(targetPath); err != nil {
-		glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
-		return nil, status.Error(codes.Internal, err.Error())
+		if err := ns.mounter.Unmount(targetPath); err != nil {
+			glog.Errorf("NodeUnpublishVolume: Mount error targetPath %v error %v", targetPath, err)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
-
+	
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
