@@ -93,10 +93,9 @@ type cbsController struct {
 	tagClient     *tag.Client
 	metadataStore util.CachePersister
 
-	zone              string
-	region            string
-	clusterId         string
-	cleanDevicemapper bool
+	zone      string
+	region    string
+	clusterId string
 }
 
 func newCbsController(drv *Driver) *cbsController {
@@ -132,14 +131,13 @@ func newCbsController(drv *Driver) *cbsController {
 	tagClient, _ := tag.NewClient(cred, drv.region, tagCpf)
 
 	return &cbsController{
-		cbsClient:         cbsClient,
-		cvmClient:         cvmClient,
-		tagClient:         tagClient,
-		zone:              drv.zone,
-		region:            drv.region,
-		clusterId:         drv.clusterId,
-		metadataStore:     drv.metadataStore,
-		cleanDevicemapper: drv.cleanDevicemapper,
+		cbsClient:     cbsClient,
+		cvmClient:     cvmClient,
+		tagClient:     tagClient,
+		zone:          drv.zone,
+		region:        drv.region,
+		clusterId:     drv.clusterId,
+		metadataStore: drv.metadataStore,
 	}
 }
 
@@ -227,13 +225,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
-	InstanceId := pickAvailabilityInstance(req.GetAccessibilityRequirements())
 	if devicemapper != "" {
 		if devicemapper != "LVM" {
 			return nil, status.Errorf(codes.InvalidArgument, "devicemapper %s is unsupported", devicemapper)
-		}
-		if InstanceId == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "Can't find InstanceId in request, the volumeBindingMode of sc must set to `WaitForFirstConsumer` if use devicemapper")
 		}
 		if devices < dmDefaultDevices {
 			return nil, status.Errorf(codes.InvalidArgument, "devices can't less then 2 when devicemapper is %s", devicemapper)
@@ -311,7 +305,7 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	createCbsReq := cbs.NewCreateDisksRequest()
 	createCbsReq.DiskName = common.StringPtr(diskName)
-	createCbsReq.ClientToken = &volumeIdempotencyName
+	createCbsReq.ClientToken = common.StringPtr(diskName)
 	createCbsReq.DiskType = &volumeType
 	createCbsReq.DiskChargeType = &volumeChargeType
 	createCbsReq.DiskSize = &size
@@ -454,17 +448,6 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(codes.Aborted, "createVolume %s failed, err: %v", diskIdsStr, respErrs)
 	}
 
-	segments := make(map[string]string)
-	if devices >= dmDefaultDevices {
-		segments = map[string]string{
-			TopologyInstanceKey: InstanceId,
-		}
-	} else {
-		segments = map[string]string{
-			TopologyZoneKey: volumeZone,
-		}
-	}
-
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			CapacityBytes: volumeCapacity,
@@ -473,7 +456,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			VolumeContext: req.GetParameters(),
 			AccessibleTopology: []*csi.Topology{
 				{
-					Segments: segments,
+					Segments: map[string]string{
+						TopologyZoneKey: volumeZone,
+					},
 				},
 			},
 		},
@@ -554,13 +539,6 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
-	if len(diskIdList) != 1 {
-		errs := ctrl.detachBeforeDeleteVolume(describeDiskResponse)
-		if len(errs) != 0 {
-			return nil, status.Errorf(codes.Aborted, "detachBeforeDeleteVolume %s failed, err: %v", req.VolumeId, errs)
-		}
-	}
-
 	sTimeForTerminateDisks := time.Now()
 	terminateCbsRequest := cbs.NewTerminateDisksRequest()
 	terminateCbsRequest.DiskIds = diskIdList
@@ -575,43 +553,6 @@ func (ctrl *cbsController) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	metrics.CbsPvcsRequestTotal.WithLabelValues(DriverName, string(util.Delete), string(util.Success)).Inc()
 
 	return &csi.DeleteVolumeResponse{}, nil
-}
-
-func (ctrl *cbsController) detachBeforeDeleteVolume(describeDiskResponse *cbs.DescribeDisksResponse) []error {
-	needDetachDisks := make(map[string]string)
-	for _, disk := range describeDiskResponse.Response.DiskSet {
-		if disk.DiskState != nil {
-			if *disk.DiskState == StatusAttached {
-				needDetachDisks[*disk.DiskId] = *disk.InstanceId
-			}
-		}
-	}
-
-	if len(needDetachDisks) == 0 {
-		return nil
-	}
-
-	glog.Infof("detach before delete volume, needDetachDisks: %v", needDetachDisks)
-	detachVolumeResponses := make(chan error, len(needDetachDisks))
-	wg := &sync.WaitGroup{}
-	for diskId, instanceId := range needDetachDisks {
-		wg.Add(1)
-		go ctrl.detachVolume(diskId, instanceId, detachVolumeResponses, wg)
-	}
-	wg.Wait()
-
-	close(detachVolumeResponses)
-	respErrs := make([]error, 0)
-	for r := range detachVolumeResponses {
-		if r != nil {
-			respErrs = append(respErrs, r)
-		}
-	}
-	if len(respErrs) > 0 {
-		return respErrs
-	}
-
-	return nil
 }
 
 func (ctrl *cbsController) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
@@ -764,11 +705,6 @@ func (ctrl *cbsController) ControllerUnpublishVolume(ctx context.Context, req *c
 	}
 	if len(diskIds) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "volume id %s is invalid", diskIds)
-	}
-
-	if len(diskIdList) > 1 && !ctrl.cleanDevicemapper {
-		glog.Infof("skip devicemapper clean for volume %s", diskIds)
-		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
 	detachVolumeResponses := make(chan error, len(diskIdList))
@@ -1239,27 +1175,6 @@ func pickAvailabilityZone(requirement *csi.TopologyRequirement) string {
 			return zone
 		}
 	}
-	return ""
-}
-
-func pickAvailabilityInstance(requirement *csi.TopologyRequirement) string {
-	if requirement == nil {
-		return ""
-	}
-
-	for _, topology := range requirement.GetPreferred() {
-		nodeID, exists := topology.GetSegments()[TopologyInstanceKey]
-		if exists {
-			return nodeID
-		}
-	}
-	for _, topology := range requirement.GetRequisite() {
-		nodeID, exists := topology.GetSegments()[TopologyInstanceKey]
-		if exists {
-			return nodeID
-		}
-	}
-
 	return ""
 }
 

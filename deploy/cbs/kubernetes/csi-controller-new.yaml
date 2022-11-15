@@ -144,7 +144,7 @@ spec:
               cpu: 100m
               memory: 50Mi
         - name: cbs-csi
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.2.9
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.3.0
           imagePullPolicy: "Always"
           command:
             - "/csi-tencentcloud-cbs"
@@ -187,4 +187,4 @@ spec:
               memory: 50Mi
       volumes:
         - name: socket-dir
-          emptyDir: { }
+          emptyDir: {}

@@ -29,7 +29,6 @@ var (
 	timeInterval        = flag.Int("time-interval", 60, "the time interval for synchronizing cluster and disks tags, just for test")
 	componentType       = flag.String("component_type", "", "component type")
 	environmentType     = flag.String("environment_type", "", "environment type")
-	cleanDevicemapper   = flag.Bool("clean_devicemapper", false, "clean devicemapper")
 )
 
 func main() {
@@ -54,7 +53,7 @@ func main() {
 		glog.Fatalf("Failed to create client: %v", err)
 	}
 
-	drv := cbs.NewDriver(*endpoint, *region, *zone, *nodeID, *cbsUrl, os.Getenv(ClusterId), *componentType, *environmentType, *volumeAttachLimit, *cleanDevicemapper, clientset)
+	drv := cbs.NewDriver(*endpoint, *region, *zone, *nodeID, *cbsUrl, os.Getenv(ClusterId), *componentType, *environmentType, *volumeAttachLimit, clientset)
 	drv.Run(*metricsServerEnable, *metricsPort, *timeInterval)
 
 	return
