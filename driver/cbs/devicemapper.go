@@ -138,6 +138,10 @@ func lvmCreate(diskIds string, req *csi.NodeStageVolumeRequest) (string, error) 
 	}
 	if noNeedCreate {
 		glog.Infof("lvm for volume %s is already created", diskIds)
+		err = lvmVgchange(req.StagingTargetPath, true)
+		if err != nil {
+			return "", fmt.Errorf("lvmVgchange failed, err: %v", err)
+		}
 		return devicePath, nil
 	}
 
@@ -171,6 +175,31 @@ func lvmCreate(diskIds string, req *csi.NodeStageVolumeRequest) (string, error) 
 	return devicePath, nil
 }
 
+func lvmVgchange(stagingTargetPath string, active bool) error {
+	pvName := getPVNameFromStagingPath(stagingTargetPath)
+	if pvName == "" {
+		return fmt.Errorf("failed to get pv name from staging path: %s", stagingTargetPath)
+	}
+	pvName = strings.ReplaceAll(pvName, "-", "_")
+
+	vgName := pvName + "_vg"
+	vgchangeArgs := make([]string, 2)
+	if active {
+		vgchangeArgs = []string{"-ay", vgName}
+	} else {
+		vgchangeArgs = []string{"-an", vgName}
+	}
+
+	resVgchange, err := exec.Command("vgchange", vgchangeArgs...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to vgchange for vg %s, err: %v", vgName, err)
+	}
+	glog.Infof("success to vgchange for vg %s, response:\n%s", vgName, string(resVgchange))
+
+	return nil
+}
+
+/*
 func lvmDelete(stagingTargetPath string) error {
 	pvName := getPVNameFromStagingPath(stagingTargetPath)
 	if pvName == "" {
@@ -197,6 +226,7 @@ func lvmDelete(stagingTargetPath string) error {
 
 	return nil
 }
+*/
 
 func lvmExpand(diskIds, devicePath string, requiredBytes int64) error {
 	diskSourceList, err := getDiskSourceListFromDiskIds(diskIds)
