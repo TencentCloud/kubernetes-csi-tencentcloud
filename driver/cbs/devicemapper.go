@@ -165,7 +165,7 @@ func lvmCreate(diskIds string, req *csi.NodeStageVolumeRequest) (string, error) 
 	}
 	glog.Infof("Result of vgcreate for lvmVolArgs %s:\n%s", lvmVolArgs, string(res))
 
-	lvCreateArgs := []string{"-l", "100%FREE", "-n", lvName, vgName}
+	lvCreateArgs := []string{"-l", "100%FREE", "-n", lvName, "-i", req.VolumeContext["devices"], vgName}
 	lvc, err := exec.Command("lvcreate", lvCreateArgs...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to lvcreate %s from vg %s , err: %v", lvName, vgName, err)
