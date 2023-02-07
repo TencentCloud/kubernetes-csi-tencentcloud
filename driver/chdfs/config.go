@@ -16,9 +16,16 @@ var chdfsConfigTemplate = template.Must(template.New("config").Parse(`
 [proxy]
 url="http://{{.Proxy.Url}}"
 
+[security]
+ssl-ca-path="{{.Security.SslCaPath}}"
+
 [client]
-mount-point="{{.Client.MountPoint}}"
 renew-session-lease-time-sec={{.Client.RenewSessionLeaseTimeSec}}
+mount-point="{{.Client.MountPoint}}"
+mount-sub-dir="{{.Client.MountSubDir}}"
+user="{{.Client.User}}"
+group="{{.Client.Group}}"
+force-sync={{.Client.ForceSync}}
 
 [cache]
 update-sts-time-sec={{.Cache.UpdateStsTimeSec}}
@@ -45,6 +52,9 @@ auto-merge={{.Cache.Write.AutoMerge}}
 auto-sync={{.Cache.Write.AutoSync}}
 auto-sync-time-ms={{.Cache.Write.AutoSyncTimeMs}}
 
+[log]
+level="{{.Log.Level}}"
+
 [log.file]
 filename="{{.LogFile.Filename}}"
 log-rotate={{.LogFile.LogRotate}}
@@ -55,19 +65,29 @@ max-backups={{.LogFile.MaxBackups}}
 `[1:]))
 
 type ChdfsConfig struct {
-	Proxy   Proxy
-	Client  Client
-	Cache   Cache
-	LogFile LogFile
+	Proxy    Proxy
+	Security Security
+	Client   Client
+	Cache    Cache
+	Log      Log
+	LogFile  LogFile
 }
 
 type Proxy struct {
 	Url string
 }
 
+type Security struct {
+	SslCaPath string
+}
+
 type Client struct {
-	MountPoint               string
 	RenewSessionLeaseTimeSec int
+	MountPoint               string
+	MountSubDir              string
+	User                     string
+	Group                    string
+	ForceSync                bool
 }
 
 type Cache struct {
@@ -100,6 +120,10 @@ type Write struct {
 	AutoSyncTimeMs      int
 }
 
+type Log struct {
+	Level string
+}
+
 type LogFile struct {
 	Filename   string
 	LogRotate  bool
@@ -119,8 +143,10 @@ func NewDefaultChdfsConfig(url, mountPoint string) *ChdfsConfig {
 			Url: url,
 		},
 		Client: Client{
-			MountPoint:               mountPoint,
 			RenewSessionLeaseTimeSec: 10,
+			MountPoint:               mountPoint,
+			MountSubDir:              "/",
+			ForceSync:                false,
 		},
 		Cache: Cache{
 			UpdateStsTimeSec:        30,
@@ -147,8 +173,11 @@ func NewDefaultChdfsConfig(url, mountPoint string) *ChdfsConfig {
 				AutoSyncTimeMs:      1000,
 			},
 		},
+		Log: Log{
+			Level: "info",
+		},
 		LogFile: LogFile{
-			Filename:   "/log/chdfs.log",
+			Filename:   "./log/chdfs.log",
 			LogRotate:  true,
 			MaxSize:    2000,
 			MaxDays:    7,
@@ -208,124 +237,139 @@ func NewChdfsConfig(url, mountPoint, additionalArgs string) (*ChdfsConfig, error
 	var errs []ArgsErr
 	for k, v := range argsMap {
 		switch strings.ToLower(k) {
-		case "renew-session-lease-time-sec":
+		case "security.ssl-ca-path":
+			chdfsConfig.Security.SslCaPath = v
+		case "client.renew-session-lease-time-sec":
 			chdfsConfig.Client.RenewSessionLeaseTimeSec, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "update-sts-time-sec":
+		case "client.mount-sub-dir":
+			chdfsConfig.Client.MountSubDir = v
+		case "client.user":
+			chdfsConfig.Client.User = v
+		case "client.group":
+			chdfsConfig.Client.Group = v
+		case "client.force-sync":
+			chdfsConfig.Client.ForceSync = isTrue(v)
+			if err != nil {
+				errs = append(errs, ArgsErr{k, err.Error()})
+			}
+		case "cache.update-sts-time-sec":
 			chdfsConfig.Cache.UpdateStsTimeSec, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "cos-client-timeout-sec":
+		case "cache.cos-client-timeout-sec":
 			chdfsConfig.Cache.CosClientTimeoutSec, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "inode-attr-expired-time-sec":
+		case "cache.inode-attr-expired-time-sec":
 			chdfsConfig.Cache.InodeAttrExpiredTimeSec, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "block-expired-time-sec":
+		case "cache.read.block-expired-time-sec":
 			chdfsConfig.Cache.Read.BlockExpiredTimeSec, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-block-num":
+		case "cache.read.max-block-num":
 			chdfsConfig.Cache.Read.MaxBlockNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "read-ahead-block-num":
+		case "cache.read.read-ahead-block-num":
 			chdfsConfig.Cache.Read.ReadAheadBlockNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-cos-load-qps":
+		case "cache.read.max-cos-load-qps":
 			chdfsConfig.Cache.Read.MaxCosLoadQps, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "load-thread-num":
+		case "cache.read.load-thread-num":
 			chdfsConfig.Cache.Read.LoadThreadNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "select-thread-num":
+		case "cache.read.select-thread-num":
 			chdfsConfig.Cache.Read.SelectThreadNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "rand-read":
+		case "cache.read.rand-read":
 			chdfsConfig.Cache.Read.RandRead, err = IsTrue(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-mem-table-range-num":
+		case "cache.write.max-mem-table-range-num":
 			chdfsConfig.Cache.Write.MaxMemTableRangeNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-mem-table-size-mb":
+		case "cache.write.max-mem-table-size-mb":
 			chdfsConfig.Cache.Write.MaxMemTableSizeMb, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-cos-flush-qps":
+		case "cache.write.max-cos-flush-qps":
 			chdfsConfig.Cache.Write.MaxCosFlushQps, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "flush-thread-num":
+		case "cache.write.flush-thread-num":
 			chdfsConfig.Cache.Write.FlushThreadNum, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "commit-queue-len":
+		case "cache.write.commit-queue-len":
 			chdfsConfig.Cache.Write.CommitQueueLen, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-commit-heap-size":
+		case "cache.write.max-commit-heap-size":
 			chdfsConfig.Cache.Write.MaxCommitHeapSize, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "auto-merge":
+		case "cache.write.auto-merge":
 			chdfsConfig.Cache.Write.AutoMerge, err = IsTrue(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "auto-sync":
+		case "cache.write.auto-sync":
 			chdfsConfig.Cache.Write.AutoSync, err = IsTrue(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "auto-sync-time-ms":
+		case "cache.write.auto-sync-time-ms":
 			chdfsConfig.Cache.Write.AutoSyncTimeMs, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "filename":
+		case "log.level":
+			chdfsConfig.Log.Level = v
+		case "log.file.filename":
 			chdfsConfig.LogFile.Filename = v
-		case "log-rotate":
+		case "log.file.log-rotate":
 			chdfsConfig.LogFile.LogRotate, err = IsTrue(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-size":
+		case "log.file.max-size":
 			chdfsConfig.LogFile.MaxSize, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-days":
+		case "log.file.max-days":
 			chdfsConfig.LogFile.MaxDays, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})
 			}
-		case "max-backups":
+		case "log.file.max-backups":
 			chdfsConfig.LogFile.MaxBackups, err = Num(v)
 			if err != nil {
 				errs = append(errs, ArgsErr{k, err.Error()})

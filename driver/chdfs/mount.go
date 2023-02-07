@@ -82,7 +82,7 @@ func Mount(options *chdfsOptions, mountPoint string) error {
 		return fmt.Errorf("command echo $? failed, output: %s, err: %v", output, err)
 	}
 	if string(output) != "0" {
-		return fmt.Errorf("command %s %s failed, check /log/chdfs.log for more details", cmd, strings.Join(args, " "))
+		return fmt.Errorf("command %s %s failed", cmd, strings.Join(args, " "))
 	}
 
 	return nil

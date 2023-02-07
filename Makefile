@@ -65,7 +65,9 @@ cos-launcher-base:
 	docker buildx build --platform linux/amd64,linux/arm64 . -f build/cosfs/launcher/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cos-launcher:${COS_LAUNCHER_BASE} --push
 
 chdfs:
-	docker buildx build --platform linux/amd64,linux/arm64 . -f build/chdfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION} --push
+	sed -i "s/v1.0.0/${CHDFS_VERSION}/g" driver/chdfs/driver.go
+	docker build . --build-arg TARGETARCH=amd64 -f build/chdfs/Dockerfile -t ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION}
+	docker push ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION}
 
 cfsturbo:
 	docker build . --build-arg TARGETARCH=amd64 -f build/cfsturbo/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_VERSION}
