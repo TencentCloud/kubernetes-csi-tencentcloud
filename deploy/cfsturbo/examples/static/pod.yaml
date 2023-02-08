@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: csi-cfsturbo-pod-static
+  name: csi-cfsturbo-pod-static
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: csi-cfsturbo-pod-static
+  template:
+    metadata:
+      labels:
+        k8s-app: csi-cfsturbo-pod-static
+    spec:
+      containers:
+        - image: nginx
+          name: csi-cfsturbo
+          volumeMounts:
+            - mountPath: /csi-cfsturbo
+              name: csi-cfsturbo
+      volumes:
+        - name: csi-cfsturbo
+          persistentVolumeClaim:
+            claimName: csi-cfsturbo-pvc-static

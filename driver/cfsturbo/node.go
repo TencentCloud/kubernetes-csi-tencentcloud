@@ -155,7 +155,7 @@ func (ns *nodeServer) NodeStageVolume(
 		//check cfs lustre core kmod install
 		err := exec.Command("/bin/bash", "-c", fmt.Sprintf("lsmod | grep %s", CFSTurboLustreKernelModule)).Run()
 		if err != nil {
-			return nil, status.Error(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
+			glog.Warning(codes.Unavailable, "Need install kernel mod in node before mount cfs turbo lustre, see https://cloud.tencent.com/document/product/582/54765")
 		}
 		mountSource = fmt.Sprintf("%s@tcp0:/%s%s", opt.Server, opt.FSID, opt.RootDir)
 	default:
@@ -367,7 +367,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
-	
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 

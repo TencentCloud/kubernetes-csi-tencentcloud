@@ -22,6 +22,7 @@ import (
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"k8s.io/utils/mount"
+	"os"
 )
 
 type driver struct {
@@ -30,8 +31,9 @@ type driver struct {
 }
 
 const (
+	ClusterId     = "CLUSTER_ID"
 	DriverName    = "com.tencent.cloud.csi.cfsturbo"
-	DriverVersion = "v1.2.2"
+	DriverVersion = "v1.0.0"
 )
 
 func NewDriver(nodeID, endpoint string) *driver {
@@ -41,6 +43,9 @@ func NewDriver(nodeID, endpoint string) *driver {
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
+	csiDriver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+	})
 
 	return &driver{
 		endpoint:  endpoint,
@@ -48,17 +53,24 @@ func NewDriver(nodeID, endpoint string) *driver {
 	}
 }
 
-func NewNodeServer(d *driver, mounter mount.Interface) *nodeServer {
+func NewControllerServer(d *driver) *controllerServer {
+	return &controllerServer{
+		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
+		mounter:                 mount.New(""),
+		clusterId:               os.Getenv(ClusterId),
+	}
+}
+
+func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
 		VolumeLocks:       util.NewVolumeLocks(),
-		mounter:           mounter,
+		mounter:           mount.New(""),
 	}
 }
 
 func (d *driver) Run() {
 	s := csicommon.NewNonBlockingGRPCServer()
-	s.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), nil,
-		NewNodeServer(d, mount.New("")))
+	s.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), NewControllerServer(d), NewNodeServer(d))
 	s.Wait()
 }

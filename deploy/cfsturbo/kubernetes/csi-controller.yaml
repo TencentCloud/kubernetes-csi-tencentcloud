@@ -1,0 +1,56 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: cfsturbo-csi-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cfsturbo-csi-controller
+  template:
+    metadata:
+      labels:
+        app: cfsturbo-csi-controller
+    spec:
+      serviceAccountName: cfsturbo-csi-node-sa
+      priorityClassName: system-cluster-critical
+      containers:
+        - name: csi-provisioner
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v2.0.4
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "--timeout=120s"
+            - "--metrics-address=:9090"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: cfsturbo
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.3
+          args:
+            - "--nodeID=$(NODE_ID)"
+            - "--endpoint=$(ADDRESS)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+            - name: CLUSTER_ID
+              value: cls-default
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
