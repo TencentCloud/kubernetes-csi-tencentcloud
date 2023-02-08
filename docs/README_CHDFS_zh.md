@@ -39,7 +39,7 @@ $ kubectl get po -n kube-system | grep chdfs
 csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 ```
 
-## 插件测试
+## 插件使用
 
 首先需要在[腾讯云 chdfs 控制台]( https://console.cloud.tencent.com/chdfs/filesystem )完成[文件系统]( https://cloud.tencent.com/document/product/1105/37234 )、[权限组]( https://cloud.tencent.com/document/product/1105/37235 )，[权限规则]( https://cloud.tencent.com/document/product/1105/37236 )和[挂载点]( https://cloud.tencent.com/document/product/1105/37237 )的创建。
 
@@ -48,9 +48,9 @@ csi-chdfs-node-fcwd4                 2/2     Running   0          23m
 - 创建权限组时，所选 vpc 应与创建集群时一致。
 - 创建权限规则时，确保集群各节点都能实现对规则的匹配。
 
-## 创建 pv
+### 创建 pv
 
-通过执行以下命令来创建测试 pv:
+通过执行以下命令来创建 pv:
 
 ```sh
 # 在 pv 所支持参数中，只有 url 是必须配置的。
@@ -100,7 +100,7 @@ kubectl apply -f deploy/chdfs/examples/pv.yaml
 
 ### 创建 pvc
 
-通过执行以下命令来创建测试 pvc:
+通过执行以下命令来创建 pvc:
 
 ```sh
 kubectl apply -f deploy/chdfs/examples/pvc.yaml
@@ -109,20 +109,20 @@ kubectl apply -f deploy/chdfs/examples/pvc.yaml
 通过执行以下命令来查看 pvc 与 pv 的绑定状态:
 
 ```sh
-$ kubectl get pvc
+$ kubectl get pvc csi-chdfs-pvc
 NAME            STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
 csi-chdfs-pvc   Bound    csi-chdfs-pv   10Gi       RWX                           39m
 ```
 
-## 创建 pod
+### 创建 pod
 
-通过执行以下命令来创建测试 pod:
+通过执行以下命令来创建 pod:
 
 ```sh
 kubectl apply -f deploy/chdfs/examples/pod.yaml
 ```
 
-通过执行以下命令来查看测试 pod 是否处于 Running 状态:
+通过执行以下命令来查看 pod 是否处于 Running 状态:
 
 ```sh
 $ kubectl get pod
