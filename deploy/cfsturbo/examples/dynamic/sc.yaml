@@ -1,0 +1,11 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: csi-cfsturbo-sc
+provisioner: com.tencent.cloud.csi.cfsturbo
+parameters:
+  # cfs turbo fsid (not cfs id)
+  fsid: "********"
+  # cfs turbo server ip
+  host: "*.*.*.*"
+reclaimPolicy: Delete

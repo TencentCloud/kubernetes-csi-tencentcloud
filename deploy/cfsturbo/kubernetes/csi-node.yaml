@@ -16,7 +16,7 @@ spec:
     spec:
       serviceAccount: cfsturbo-csi-node-sa
       hostNetwork: true
-      priorityClassName: system-node-critical
+      priorityClassName: system-cluster-critical
       containers:
         - name: driver-registrar
           image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v1.2.0
@@ -44,7 +44,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.3
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
