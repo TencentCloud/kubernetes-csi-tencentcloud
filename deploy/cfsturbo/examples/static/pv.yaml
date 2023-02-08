@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: csi-cfsturbo-pv
+  name: csi-cfsturbo-pv-static
 spec:
   accessModes:
   - ReadWriteMany
@@ -10,16 +10,14 @@ spec:
   csi:
     driver: com.tencent.cloud.csi.cfsturbo
     # volumeHandle in PV must be unique, use pv name is better
-    volumeHandle: csi-cfsturbo-pv
+    volumeHandle: csi-cfsturbo-pv-static
     volumeAttributes:
-      # cfs turbo proto
-      proto: lustre
       # cfs turbo rootdir
       rootdir: /cfs
       # cfs turbo fsid (not cfs id)
-      fsid: xxxxxxxx
+      fsid: "********"
       # cfs turbo server ip
-      host: 10.0.0.116
+      host: "*.*.*.*"
       # cfs turbo subPath
       path: /
   storageClassName: ""

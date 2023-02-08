@@ -26,6 +26,7 @@ COS_LAUNCHER_MULTI_VERSION?=cos-launcher-multi
 CHDFS_VERSION?=chdfs
 
 # cfsturbo image tag
+CFSTURBO_BASE?=base
 CFSTURBO_VERSION?=cfsturbo
 
 all: cbs cfs cos cfsturbo chdfs
@@ -70,5 +71,10 @@ chdfs:
 	docker push ${REGISTRY}/csi-tencentcloud-chdfs:${CHDFS_VERSION}
 
 cfsturbo:
-	docker build . --build-arg TARGETARCH=amd64 -f build/cfsturbo/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_VERSION}
+	sed -i "s/v1.0.0/${CFSTURBO_VERSION}/g" driver/cfsturbo/driver.go
+	docker build . -f build/cfsturbo/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_VERSION}
 	docker push ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_VERSION}
+
+cfsturbo-base:
+	docker build . -f build/cfsturbo/base/Dockerfile -t ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_BASE}
+	docker push ${REGISTRY}/csi-tencentcloud-cfsturbo:${CFSTURBO_BASE}
