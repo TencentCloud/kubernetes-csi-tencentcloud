@@ -5,7 +5,7 @@ ADD . .
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -v -a -ldflags '-extldflags "-static"' -o csi-chdfs_${TARGETARCH} cmd/chdfs/main.go
 
-FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-chdfs:base.1
+FROM ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-chdfs:base.2
 
 LABEL maintainers="TencentCloud TKE Authors"
 LABEL description="TencentCloud CHDFS CSI Plugin"
