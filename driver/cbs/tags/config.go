@@ -22,7 +22,7 @@ func GetConfigTags() (map[string]string, error) {
 			glog.Infof("Create empty config %s", ConfigPath)
 			err := UpdateConfigTags(ConfigTags)
 			if err != nil {
-				glog.Errorf("Create empty cfsturboConfig %s failed, err: %v", ConfigPath, err)
+				glog.Errorf("Create empty config %s failed, err: %v", ConfigPath, err)
 				return nil, err
 			}
 			return ConfigTags, nil

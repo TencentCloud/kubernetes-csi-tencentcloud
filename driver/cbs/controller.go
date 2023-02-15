@@ -470,7 +470,7 @@ func (ctrl *cbsController) createVolume(diskId, aspId string, createVolumeRespon
 
 	disk := new(cbs.Disk)
 	ticker := time.NewTicker(time.Second * 5)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
 	defer cancel()
 	for {
 		select {
@@ -627,7 +627,7 @@ func (ctrl *cbsController) attachVolume(diskId, instanceId string, attachVolumeR
 			}
 			if *disk.DiskState == StatusAttached && *disk.InstanceId != instanceId {
 				metrics.OperationErrorsTotal.WithLabelValues(DriverName, string(util.Attach), diskId, instanceId, util.ErrDiskAttachedAlready.Code).Inc()
-				attachVolumeResponses <- status.Errorf(codes.FailedPrecondition, "disk %s is attach to another instance() already", diskId, *disk.InstanceId)
+				attachVolumeResponses <- status.Errorf(codes.FailedPrecondition, "disk %s is attach to another instance(%s) already", diskId, *disk.InstanceId)
 				return
 			}
 		}
@@ -745,6 +745,11 @@ func (ctrl *cbsController) detachVolume(diskId, instanceId string, detachVolumeR
 	for _, disk := range describeDiskResponse.Response.DiskSet {
 		if *disk.DiskId == diskId {
 			if *disk.DiskState == StatusUnattached {
+				detachVolumeResponses <- nil
+				return
+			}
+			if *disk.DiskState == StatusAttached && *disk.InstanceId != instanceId {
+				glog.Warningf("disk %s is already attached to node %s, assuming the disk is detached form node %s", diskId, *disk.InstanceId, instanceId)
 				detachVolumeResponses <- nil
 				return
 			}
