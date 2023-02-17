@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,8 +25,11 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
+	cbs "github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/cbs/v20170312"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/metrics"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 const (
@@ -61,6 +65,10 @@ func newCbsNode(drv *Driver) *cbsNode {
 		}
 		glog.Infof("instanceID: %s", nodeID)
 		drv.nodeID = nodeID
+	}
+
+	if drv.volumeAttachLimit < 0 {
+		drv.volumeAttachLimit = getMaxAttachCount(drv)
 	}
 
 	return &cbsNode{
@@ -195,8 +203,8 @@ func (node *cbsNode) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		tmpPath := filepath.Join(req.StagingTargetPath, diskIds)
 		notMnt, err := node.mounter.IsLikelyNotMountPoint(tmpPath)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, status.Error(codes.NotFound, err.Error())
+			if !os.IsNotExist(err) && !isInputOutputErr(err) {
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 			notMnt = true
 		}
@@ -378,7 +386,7 @@ func (node *cbsNode) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 func (node *cbsNode) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
 		NodeId:            node.nodeID,
-		MaxVolumesPerNode: node.getMaxAttachVolumePerNode(),
+		MaxVolumesPerNode: node.volumeAttachLimit,
 
 		// make sure that the driver works on this particular zone only
 		AccessibleTopology: &csi.Topology{
@@ -586,14 +594,6 @@ func (node *cbsNode) cleanIntreeStagingPath(targetPath, volumeId string) error {
 	return nil
 }
 
-func (node *cbsNode) getMaxAttachVolumePerNode() int64 {
-	if node.volumeAttachLimit >= 0 {
-		return node.volumeAttachLimit
-	}
-
-	return int64(defaultMaxAttachVolumePerNode)
-}
-
 func createMountPoint(mountPath string, isBlock bool) error {
 	fi, err := os.Stat(mountPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -628,6 +628,13 @@ func createMountPoint(mountPath string, isBlock bool) error {
 
 func isNotSupport(err error) bool {
 	if strings.Contains(err.Error(), "resize of format") && strings.Contains(err.Error(), "is not supported for device") {
+		return true
+	}
+	return false
+}
+
+func isInputOutputErr(err error) bool {
+	if strings.Contains(err.Error(), "input/output error") {
 		return true
 	}
 	return false
@@ -684,6 +691,62 @@ func getProviderIDFromNode(client kubernetes.Interface, nodeName string) string 
 			return node.Spec.ProviderID
 		case <-ctx.Done():
 			glog.Fatalf("get providerID from node %s failed before deadline exceeded", nodeName)
+		}
+	}
+}
+
+func getMaxAttachCount(drv *Driver) int64 {
+	if strings.Contains(drv.nodeID, "eks-") {
+		return int64(defaultMaxAttachVolumePerNode)
+	}
+
+	secretID, secretKey, token, _ := util.GetSercet()
+	cred := &common.Credential{
+		SecretId:  secretID,
+		SecretKey: secretKey,
+		Token:     token,
+	}
+
+	cbsCpf := profile.NewClientProfile()
+	cbsCpf.HttpProfile.Endpoint = cbsUrl
+	if drv.environmentType == "test" {
+		cbsCpf.HttpProfile.Endpoint = cbsTestUrl
+	}
+	if drv.cbsUrl != "" {
+		cbsCpf.HttpProfile.Endpoint = drv.cbsUrl
+	}
+	cbsClient, _ := cbs.NewClient(cred, drv.region, cbsCpf)
+
+	describeInstancesDiskNumRequest := cbs.NewDescribeInstancesDiskNumRequest()
+	describeInstancesDiskNumRequest.InstanceIds = []*string{&drv.nodeID}
+
+	rand.Seed(time.Now().UnixNano())
+	n := rand.Intn(20)
+	glog.Infof("Begin to getMaxAttachCount after %d seconds...\n", n)
+	time.Sleep(time.Duration(n) * time.Second)
+
+	ticker := time.NewTicker(time.Second * 5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			describeInstancesDiskNumResponse, err := cbsClient.DescribeInstancesDiskNum(describeInstancesDiskNumRequest)
+			if err != nil {
+				glog.Warningf("getMaxAttachCount for node %s failed, err: %v", drv.nodeID, err)
+			}
+			if len(describeInstancesDiskNumResponse.Response.AttachDetail) > 0 {
+				for _, attachDetail := range describeInstancesDiskNumResponse.Response.AttachDetail {
+					if *attachDetail.InstanceId == drv.nodeID {
+						glog.Infof("MaxAttachCount: %v", *attachDetail.MaxAttachCount-2)
+						return int64(*attachDetail.MaxAttachCount - 2)
+					}
+				}
+			}
+			glog.Warningf("getMaxAttachCount for node %s failed, AttachDetail: %v, RequestId: %s", drv.nodeID,
+				describeInstancesDiskNumResponse.Response.AttachDetail, *describeInstancesDiskNumResponse.Response.RequestId)
+		case <-ctx.Done():
+			glog.Fatalf("getMaxAttachCount for node %s failed before deadline exceeded", drv.nodeID)
 		}
 	}
 }
