@@ -133,7 +133,7 @@ func (drv *Driver) Run(enableMetricsServer bool, metricPort int64, timeInterval 
 			for {
 				rand.Seed(time.Now().UnixNano())
 				n := rand.Intn(timeInterval)
-				glog.Infof("Begin to sync the tags of cluster and disks after sleeping %d minutes...\n", n)
+				glog.Infof("Begin to sync the tags of cluster and disks after %d minutes...\n", n)
 				time.Sleep(time.Duration(n) * time.Minute)
 				tags.UpdateDisksTags(drv.client, cs.cbsClient, cs.cvmClient, cs.tagClient, drv.region, drv.clusterId)
 			}
