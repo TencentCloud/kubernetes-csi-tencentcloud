@@ -30,8 +30,18 @@ spec:
       labels:
         app: csi-provisioner-cfsplugin
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: NotIn
+                    values:
+                      - CHC
+                      - external
       serviceAccount: csi-cfs-tencentcloud
-      priorityClassName: system-node-critical
+      priorityClassName: system-cluster-critical
       hostAliases:
         - ip: "169.254.0.23"
           hostnames:
@@ -54,7 +64,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: cfs
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.5
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:v2.0.6
           args:
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
