@@ -141,8 +141,8 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Error(codes.Internal, "CreateCfsFileSystem's Response FileSystemId is nil!")
 	}
 
-	ticker := time.NewTicker(time.Second * 3)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*180)
+	ticker := time.NewTicker(time.Second * 5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
 	defer cancel()
 
 	for {
