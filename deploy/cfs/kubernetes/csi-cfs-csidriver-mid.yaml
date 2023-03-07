@@ -1,11 +1,10 @@
-apiVersion: storage.k8s.io/v1
+apiVersion: storage.k8s.io/v1beta1
 kind: CSIDriver
 metadata:
   name: com.tencent.cloud.csi.cfs
 spec:
   attachRequired: false
   podInfoOnMount: false
-  fsGroupPolicy: File
   volumeLifecycleModes:
     - Persistent
     - Ephemeral
