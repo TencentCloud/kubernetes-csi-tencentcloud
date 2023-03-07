@@ -14,9 +14,11 @@ spec:
       labels:
         app: csi-nodeplugin-cfsplugin
     spec:
+      tolerations:
+        - operator: Exists
       serviceAccount: csi-cfs-tencentcloud
       hostNetwork: true
-      priorityClassName: system-node-critical
+      priorityClassName: system-cluster-critical
       hostAliases:
         - ip: "169.254.0.23"
           hostnames:
@@ -50,7 +52,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:1.0.5
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfs:v2.0.6
           imagePullPolicy: "Always"
           args :
             - "--nodeID=$(NODE_ID)"
