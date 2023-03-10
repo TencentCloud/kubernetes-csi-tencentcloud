@@ -181,7 +181,9 @@ func (ctrl *cbsController) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		case "zone", "diskzone":
 			volumeZone = v
 		case "paymode", "diskchargetype":
-			volumeChargeType = v
+			if v == DiskChargeTypePrePaid {
+				volumeChargeType = v
+			}
 		case "renewflag", "diskchargeprepaidrenewflag":
 			volumeChargePrepaidRenewFlag = v
 		case "diskchargetypeprepaidperiod":

@@ -78,3 +78,11 @@ func convertToIntreeStagingPath(targetPath, volumeId string) string {
 	}
 	return strings.Split(targetPath, "/pods/")[0] + "/plugins/kubernetes.io/qcloud-cbs/mounts/" + volumeId
 }
+
+func convertToOldStagingPath(targetPath string) string {
+	if strings.Contains(targetPath, "volumeDevices") {
+		return ""
+	}
+	return fmt.Sprintf("%s/plugins/kubernetes.io/csi/pv/%s/globalmount", strings.Split(targetPath, "/pods/")[0],
+		strings.Split(strings.TrimSuffix(targetPath, "/mount"), "/kubernetes.io~csi/")[1])
+}
