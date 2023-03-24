@@ -339,6 +339,11 @@ func (node *cbsNode) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	if err := node.cleanOldStagingPath(targetPath); err != nil {
+		glog.Errorf("NodeUnpublishVolume: cleanOldStagingPath failed, error %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	for n := 0; ; n++ {
 		notMnt, err := node.mounter.IsLikelyNotMountPoint(targetPath)
 		if err != nil {
@@ -594,6 +599,26 @@ func (node *cbsNode) cleanIntreeStagingPath(targetPath, volumeId string) error {
 	return nil
 }
 
+func (node *cbsNode) cleanOldStagingPath(targetPath string) error {
+	oldStagingPath := convertToOldStagingPath(targetPath)
+	if oldStagingPath == "" {
+		return nil
+	}
+
+	if pathExists, err := util.PathExists(oldStagingPath); err != nil {
+		return err
+	} else if !pathExists {
+		return nil
+	}
+
+	glog.Infof("try to clean oldStagingPath %s", oldStagingPath)
+	if err := mount.CleanupMountPoint(oldStagingPath, node.mounter, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func createMountPoint(mountPath string, isBlock bool) error {
 	fi, err := os.Stat(mountPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -734,6 +759,7 @@ func getMaxAttachCount(drv *Driver) int64 {
 			describeInstancesDiskNumResponse, err := cbsClient.DescribeInstancesDiskNum(describeInstancesDiskNumRequest)
 			if err != nil {
 				glog.Warningf("getMaxAttachCount for node %s failed, err: %v", drv.nodeID, err)
+				continue
 			}
 			if len(describeInstancesDiskNumResponse.Response.AttachDetail) > 0 {
 				for _, attachDetail := range describeInstancesDiskNumResponse.Response.AttachDetail {
