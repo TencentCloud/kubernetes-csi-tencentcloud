@@ -34,6 +34,10 @@ spec:
         - ip: "169.254.0.23"
           hostnames:
             - "metadata.tencentyun.com"
+        - ip: "169.254.0.95"
+          hostnames:
+            - "cbs.internal.tencentcloudapi.com"
+            - "cbs.test.tencentcloudapi.com"
       containers:
         - name: driver-registrar
           image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v1.2.0
@@ -66,7 +70,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.3.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cbs:v2.3.3
           command:
             - "/csi-tencentcloud-cbs"
           args:
