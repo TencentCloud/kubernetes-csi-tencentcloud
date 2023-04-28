@@ -9,21 +9,21 @@ import (
 
 const version = "v1.0.0"
 
-type driver struct {
+type Driver struct {
 	csiDriver *csicommon.CSIDriver
 	endpoint  string
 }
 
 // NewDriver creates a new CSI driver for CHDFS.
-func NewDriver(endpoint, driverName, nodeID string) *driver {
-	glog.Infof("Driver: %v version: %v", driverName, version)
+func NewDriver(endpoint, driverName, nodeID string) *Driver {
+	glog.Infof("NewDriver for CHDFS, driverName: %v version: %v  nodeID: %v", driverName, version, nodeID)
 
 	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
 		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 	})
 
-	return &driver{
+	return &Driver{
 		csiDriver: csiDriver,
 		endpoint:  endpoint,
 	}
@@ -36,7 +36,7 @@ func NewNodeServer(driver *csicommon.CSIDriver) csi.NodeServer {
 	}
 }
 
-func (d *driver) Start() {
+func (d *Driver) Start() {
 	server := csicommon.NewNonBlockingGRPCServer()
 	server.Start(d.endpoint, csicommon.NewDefaultIdentityServer(d.csiDriver), nil,
 		NewNodeServer(d.csiDriver))

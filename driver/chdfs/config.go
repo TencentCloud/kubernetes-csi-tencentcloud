@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/golang/glog"
 )
 
 var chdfsConfigTemplate = template.Must(template.New("config").Parse(`
@@ -202,8 +204,14 @@ func prepareConfig(url, additionalArgs string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error Execute chdfsConfigTemplate: %s", err.Error())
 	}
+	configName := mountPoint
 
-	config := "/etc/chdfs/" + mountPoint + ".conf"
+	// add subDir
+	if chdfsConfig.Client.MountSubDir != "" && chdfsConfig.Client.MountSubDir != "/" {
+		configName = fmt.Sprintf("%s%s", mountPoint, strings.ReplaceAll(chdfsConfig.Client.MountSubDir, "/", "-"))
+	}
+	glog.Infof("configName: %s, subDir: %s", configName, chdfsConfig.Client.MountSubDir)
+	config := "/etc/chdfs/" + configName + ".conf"
 	conf, err := ioutil.ReadAll(buff)
 	if err != nil {
 		return "", fmt.Errorf("error resolve template: %s", err.Error())

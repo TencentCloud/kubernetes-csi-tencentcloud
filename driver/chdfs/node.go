@@ -38,7 +38,7 @@ func (node *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 func (node *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	glog.Infof("NodePublishVolume NodePublishVolumeRequest is: %v", req)
 
-	volID := req.GetVolumeId()
+	volID := req.GetVolumeId() //this should be pv name
 	if volID == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID missing in request")
 	}
