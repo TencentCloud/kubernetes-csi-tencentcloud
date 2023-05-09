@@ -45,7 +45,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-chdfs:v1.0.2
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-chdfs:v1.0.3
           args:
             - "--v=5"
             - "--logtostderr=true"

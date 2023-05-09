@@ -129,3 +129,19 @@ $ kubectl get pod
 NAME                             READY   STATUS    RESTARTS   AGE
 csi-chdfs-pod-6bdcf45f89-lrw82   1/1     Running   0          9s
 ```
+
+### 多目录挂载说明
+
+需要预先在对应的chdfs文件系统中创建对应的子目录,然后创建pvc,pv来指定到对应的子目录,以下是在pv yaml中指定子目录的示例
+
+```yaml
+  csi:
+    driver: com.tencent.cloud.csi.chdfs
+    volumeAttributes:
+      additional_args: client.mount-sub-dir=/aaa    #指定子目录
+      allowother: "true"
+      debug: "true"
+      sync: "false"
+      url: xxx.chdfs.ap-guangzhou.myqcloud.com
+    volumeHandle: csi-chdfs-pv-1
+```
