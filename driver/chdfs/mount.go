@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"golang.org/x/net/context"
 	"k8s.io/utils/exec"
 	"k8s.io/utils/mount"
 )
@@ -69,21 +70,38 @@ func Mount(options *chdfsOptions, mountPoint string) error {
 		return fmt.Errorf("prepareConfig failed, %s", err.Error())
 	}
 	args = append(args, "--config="+config)
+	cmd := fmt.Sprintf("chdfs-fuse %s", strings.Join(args, " "))
 
-	cmd := "chdfs-fuse"
-	err = exec.New().Command(cmd, args...).Start()
+	glog.Infof("will be exec cmd: %s, start a new goroutine", cmd)
+	//start to exec cmd
+	go execCmd(cmd)
+	// will isMountPoint in ticker
+	ticker := time.NewTicker(time.Second * 1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*40)
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			isMnt, err := isMountPoint(mountPoint)
+			if err != nil {
+				glog.Errorf("isMountPoint err: %s for mountPoint: %s", err.Error(), mountPoint)
+				return fmt.Errorf("isMountPoint err: %s for mountPoint: %s", err.Error(), mountPoint)
+			}
+			if isMnt {
+				glog.Infof("mountPoint %s is already mounted", mountPoint)
+				return nil
+			}
+		case <-ctx.Done():
+			glog.Errorf("isMountPoint: %s failed before deadline exceeded", mountPoint)
+			return fmt.Errorf("isMountPoint: %s failed before deadline exceeded", mountPoint)
+		}
+	}
+}
+
+func execCmd(cmd string) {
+	output, err := exec.New().Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("command %s %s failed, err: %v", cmd, strings.Join(args, " "), err)
+		glog.Errorf("output: %s, error: %v", string(output), err)
 	}
-
-	time.Sleep(1 * time.Second)
-	output, err := exec.New().Command("echo", "$?").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("command echo $? failed, output: %s, err: %v", output, err)
-	}
-	if string(output) != "0" {
-		return fmt.Errorf("command %s %s failed", cmd, strings.Join(args, " "))
-	}
-
-	return nil
+	glog.Infof("execCmd end !")
 }
