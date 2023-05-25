@@ -17,12 +17,13 @@ limitations under the License.
 package cfsturbo
 
 import (
+	"os"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/tencentcloud/kubernetes-csi-tencentcloud/driver/util"
 	"k8s.io/utils/mount"
-	"os"
 )
 
 type driver struct {
@@ -33,11 +34,11 @@ type driver struct {
 const (
 	ClusterId     = "CLUSTER_ID"
 	DriverName    = "com.tencent.cloud.csi.cfsturbo"
-	DriverVersion = "v1.0.0"
+	DriverVersion = "cfsturbo"
 )
 
-func NewDriver(nodeID, endpoint string) *driver {
-	glog.Infof("Driver: %v version: %v", DriverName, DriverVersion)
+func NewDriver(nodeID, endpoint, componentType string) *driver {
+	glog.Infof("Driver: %v version: %v region: %v", DriverName, DriverVersion, componentType)
 
 	csiDriver := csicommon.NewCSIDriver(DriverName, DriverVersion, nodeID)
 	csiDriver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
@@ -46,6 +47,11 @@ func NewDriver(nodeID, endpoint string) *driver {
 	csiDriver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 	})
+	if componentType == "node" { //只在ds中启动
+		install := newInstaller()
+		// start a Goroutine loop
+		go install.loop()
+	}
 
 	return &driver{
 		endpoint:  endpoint,

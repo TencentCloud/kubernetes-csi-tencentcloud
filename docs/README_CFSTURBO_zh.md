@@ -49,9 +49,6 @@ cfsturbo-csi-node-ztc7k                    2/2     Running   0             10m
 
 首先需要在[腾讯云文件存储控制台]( https://console.cloud.tencent.com/cfs )完成 turbo 类型文件系统的创建。
 
-**注意**：  
-使用 cfsturbo 插件挂载 turbo 类型文件系统，需预先使用 [CFS 客户端工具](https://console.cloud.tencent.com/cfs/fs/cvmInitialize) 在集群节点内安装对应客户端。
-
 ### Dynamic Provisioning
 
 完成 sc、pvc 创建后，插件会在文件系统中创建如 `/cfs/$CLUSTER_ID/$pvname` 格式的子目录；完成 pod 创建后，插件会将上一步创建的子目录挂载到容器对应目录下；完成 pod、pvc 删除后，插件会根据 sc 中配置的回收策略来选择是否进行子目录清理。
