@@ -44,10 +44,11 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.3
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cfsturbo:v1.2.4
           args :
             - "--nodeID=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
+            - "--component_type=node"
           env:
             - name: NODE_ID
               valueFrom:
@@ -65,6 +66,8 @@ spec:
             - name: global-mount-dir
               mountPath: /etc/cfsturbo/global
               mountPropagation: "Bidirectional"
+            - name: host-root
+              mountPath: /host
       volumes:
         - name: plugin-dir
           hostPath:
@@ -82,3 +85,6 @@ spec:
           hostPath:
             path: /etc/cfsturbo/global
             type: DirectoryOrCreate
+        - name: host-root
+          hostPath:
+            path: /

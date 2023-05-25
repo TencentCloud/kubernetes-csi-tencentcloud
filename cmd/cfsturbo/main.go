@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	endpoint = flag.String("endpoint", "unix://plugin/csi.sock", "CSI endpoint")
-	nodeID   = flag.String("nodeID", "", "node ID")
+	endpoint      = flag.String("endpoint", "unix://plugin/csi.sock", "CSI endpoint")
+	nodeID        = flag.String("nodeID", "", "node ID")
+	componentType = flag.String("component_type", "", "component type")
 )
 
 func main() {
@@ -20,6 +21,6 @@ func main() {
 		glog.Fatal("nodeID is empty")
 	}
 
-	drv := cfsturbo.NewDriver(*nodeID, *endpoint)
+	drv := cfsturbo.NewDriver(*nodeID, *endpoint, *componentType)
 	drv.Run()
 }
