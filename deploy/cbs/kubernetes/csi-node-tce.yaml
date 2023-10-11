@@ -60,6 +60,12 @@ spec:
             - "--logtostderr=true"
             - "--endpoint=unix:///csi/csi.sock"
             - "--component_type=node"
+            - "--cbs_url=xxx"
+            - "--cvm_url=xxx"
+            - "--tag_url=xxx"
+            - "--metadata_endpoint=xxx"
+            - "--region=xxx"
+            - "--zone=xxx"
           env:
             - name: NODE_ID
               valueFrom:

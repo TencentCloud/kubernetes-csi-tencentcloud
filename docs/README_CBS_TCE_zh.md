@@ -72,11 +72,14 @@ kubectl apply -f  deploy/cbs/kubernetes/csi-node-rbac.yaml
 
 #### 创建controller,node和plugin
 Kubernetes v1.18.x及以上版本创建controller plugin和node plugin
-在TCE环境中，需要修改deploy/cbs/kubernetes/csi-controller-tce.yaml中下面几个cbs-csi容器的启动参数为TCE真实环境域名
-- --cbs_url=xxx
-- --cvm_url=xxx
-- --tag_url=xxx
-- --metadata_endpoint=xxx
+在TCE环境中，需要修改deploy/cbs/kubernetes/csi-controller-tce.yaml  和  deploy/cbs/kubernetes/csi-node-tce.yaml 中下面几个cbs-csi容器的启动参数为TCE真实环境域名
+- --cbs_url=xxx    // eg:  cbs.api3.yfm18.tcepoc.fsphere.cn 
+- --cvm_url=xxx    // eg:  cvm.api3.yfm18.tcepoc.fsphere.cn
+- --tag_url=xxx    // eg:  tag.api3.yfm18.tcepoc.fsphere.cn
+- --metadata_endpoint=xxx   // eg:  http://product-cvm-metadata.chongqing.yfm18.tcepoc.fsphere.cn/latest/meta-data
+- --region=xxx      //环境的region    
+- --zone=xxx     //环境的zone
+
 
 ```sh
 kubectl apply -f  deploy/cbs/kubernetes/csi-controller-tce.yaml

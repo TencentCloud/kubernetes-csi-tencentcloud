@@ -130,6 +130,8 @@ spec:
             - --cvm_url=xxx
             - --tag_url=xxx
             - --metadata_endpoint=xxx
+            - --region=xxx
+            - --zone=xxx
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
