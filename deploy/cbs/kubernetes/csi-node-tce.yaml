@@ -66,6 +66,7 @@ spec:
             - "--metadata_endpoint=xxx"
             - "--region=xxx"
             - "--zone=xxx"
+            - "--nodeID=ins-xxx"
           env:
             - name: NODE_ID
               valueFrom:

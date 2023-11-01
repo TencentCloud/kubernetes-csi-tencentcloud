@@ -1,0 +1,155 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-cbs-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cbs-csi-controller
+  template:
+    metadata:
+      labels:
+        app: cbs-csi-controller
+    spec:
+      serviceAccountName: cbs-csi-controller-sa
+      priorityClassName: system-cluster-critical
+      containers:
+        - name: csi-provisioner
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-provisioner:v2.0.4
+          imagePullPolicy: Always
+          args:
+            - --feature-gates=Topology=true
+            - --csi-address=$(ADDRESS)
+            - --v=5
+            - --timeout=120s
+            - --metrics-address=:9090
+            - --leader-election=true
+            - --default-fstype=ext4
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: csi-attacher
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-attacher:v3.0.2
+          imagePullPolicy: Always
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=5
+            - --leader-election=true
+            - --metrics-address=:9091
+            - --worker-threads=50
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: csi-snapshotter
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-snapshotter:v3.0.2
+          imagePullPolicy: Always
+          args:
+            - --csi-address=$(ADDRESS)
+            - --leader-election=true
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: snapshot-controller
+          image: ccr.ccs.tencentyun.com/tkeimages/snapshot-controller:v3.0.2
+          imagePullPolicy: Always
+          args:
+            - --v=5
+            - --leader-election=true
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+        - name: csi-resizer
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-resizer:v1.0.1
+          imagePullPolicy: Always
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=5
+            - --leader-election=true
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: cbs-csi
+          image: ccr.ccs.tencentyun.com/binqiniu/csi-tencentcloud-cbs:eks-beta2
+          imagePullPolicy: Always
+          command:
+            - /csi-tencentcloud-cbs
+          args:
+            - --v=5
+            - --logtostderr=true
+            - --endpoint=$(ADDRESS)
+            - --component_type=controller
+            - --region=xxx
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+            - name: TENCENTCLOUD_API_SECRET_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cbs-csi-api-key
+                  key: TENCENTCLOUD_CBS_API_SECRET_ID
+                  optional: true
+            - name: TENCENTCLOUD_API_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cbs-csi-api-key
+                  key: TENCENTCLOUD_CBS_API_SECRET_KEY
+                  optional: true
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+      volumes:
+        - emptyDir: {}
+          name: socket-dir
