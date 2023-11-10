@@ -1,0 +1,203 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  annotations:
+    meta.helm.sh/release-name: cos
+    meta.helm.sh/release-namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: csi-cosplugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-cosplugin
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: csi-cosplugin
+    spec:
+      containers:
+        - args:
+            - --v=3
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-node-driver-registrar:v2.0.1
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - rm -rf /registration/com.tencent.cloud.csi.cosfs /registration/com.tencent.cloud.csi.cosfs-reg.sock
+          name: driver-registrar
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+              name: socket-dir
+            - mountPath: /registration
+              name: registration-dir
+        - args:
+            - --nodeid=$(NODE_ID)
+            - --endpoint=$(CSI_ENDPOINT)
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs/csi.sock
+          image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos:v2.0.2
+          imagePullPolicy: Always
+          name: cosfs
+          resources: {}
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+            privileged: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+              name: plugin-dir
+            - mountPath: /etc/csi-cos
+              name: launcher-socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: pods-mount-dir
+      dnsPolicy: ClusterFirst
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: csi-cos-tencentcloud
+      serviceAccountName: csi-cos-tencentcloud
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - operator: Exists
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+          name: pods-mount-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            type: DirectoryOrCreate
+          name: plugin-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins/com.tencent.cloud.csi.cosfs
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+          name: registration-dir
+        - hostPath:
+            path: /etc/csi-cos
+            type: DirectoryOrCreate
+          name: launcher-socket-dir
+  updateStrategy:
+    type: OnDelete
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  annotations:
+    meta.helm.sh/release-name: cos
+    meta.helm.sh/release-namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: csi-coslauncher
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-coslauncher
+  template:
+    metadata:
+      labels:
+        app: csi-coslauncher
+    spec:
+      containers:
+        - image: ccr.ccs.tencentyun.com/tkeimages/csi-tencentcloud-cos-launcher:v2.0.2
+          imagePullPolicy: Always
+          name: cos-launcher
+          resources:
+            limits:
+              cpu: "8"
+              memory: 8Gi
+            requests:
+              cpu: 250m
+              memory: 250Mi
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+            privileged: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/csi-cos
+              name: launcher-socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: pods-mount-dir
+            - mountPath: /dev/fuse
+              name: host-fuse
+      dnsPolicy: ClusterFirst
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - operator: Exists
+      volumes:
+        - hostPath:
+            path: /etc/csi-cos
+            type: DirectoryOrCreate
+          name: launcher-socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+          name: pods-mount-dir
+        - hostPath:
+            path: /dev/fuse
+            type: ""
+          name: host-fuse
+  updateStrategy:
+    type: OnDelete
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-cos-tencentcloud
+rules:
+  - apiGroups: [""]
+    resources: ["events", "persistentvolumes", "secrets"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "delete", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments", "volumeattachments/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
