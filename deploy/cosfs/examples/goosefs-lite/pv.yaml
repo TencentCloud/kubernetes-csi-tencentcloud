@@ -18,8 +18,8 @@ spec:
       bucket: "xxx"
       # cos bucket mount path
       path: "/"
-      # cos mounter, support [cosfs|goosefs-lite]
-      mounter: "goosefs-lite"
+      # cos mounter, support [cosfs|lite]
+      mounter: "lite"
       # config for goosefs-lite, eg: fs.cosn.maxRetries=100, fs.cosn.retry.interval.seconds=4
       core_site:
       # config for goosefs-lite, eg: goosefs.fuse.umount.timeout=110000
