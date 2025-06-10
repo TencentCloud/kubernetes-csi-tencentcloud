@@ -108,7 +108,7 @@ kubectl apply -f  deploy/cbs/examples/snapshoter/restore.yaml
 * diskChargePrepaidRenewFlag: If diskType is `PREPAID`, `NOTIFY_AND_AUTO_RENEW`, `NOTIFY_AND_MANUAL_RENEW`, `DISABLE_NOTIFY_AND_MANUAL_RENEW`.
 * encrypt: if need encrypt in cbs, `ENCRYPT` is only one value.
 * disktags: add tags to cbs volume. e.g. `a:b,c:d`
-* throughputperformance: if need extra performance for hssd/tssd. e.g. `100`. https://cloud.tencent.com/document/product/362/51896
+* throughputPerformance: if need extra performance for hssd/tssd. e.g. `100`. https://cloud.tencent.com/document/product/362/51896
 * cdcid: `CdcId`
 
 ## cbs volume size limit, need pvc or pv
