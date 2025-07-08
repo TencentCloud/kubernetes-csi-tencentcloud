@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 THL A29 Limited, a Tencent company. All Rights Reserved.
+// Copyright (c) 2017-2018 Tencent. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
 package v20180813
 
 import (
-    "encoding/json"
+	"encoding/json"
 
-    tchttp "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http"
+	tchttp "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http"
 )
 
 type AddResourceTagRequest struct {
@@ -34,12 +34,12 @@ type AddResourceTagRequest struct {
 }
 
 func (r *AddResourceTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *AddResourceTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type AddResourceTagResponse struct {
@@ -52,12 +52,12 @@ type AddResourceTagResponse struct {
 }
 
 func (r *AddResourceTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *AddResourceTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type AttachResourcesTagRequest struct {
@@ -83,12 +83,12 @@ type AttachResourcesTagRequest struct {
 }
 
 func (r *AttachResourcesTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *AttachResourcesTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type AttachResourcesTagResponse struct {
@@ -101,12 +101,12 @@ type AttachResourcesTagResponse struct {
 }
 
 func (r *AttachResourcesTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *AttachResourcesTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type CreateTagRequest struct {
@@ -120,12 +120,12 @@ type CreateTagRequest struct {
 }
 
 func (r *CreateTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *CreateTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type CreateTagResponse struct {
@@ -138,12 +138,12 @@ type CreateTagResponse struct {
 }
 
 func (r *CreateTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *CreateTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DeleteResourceTagRequest struct {
@@ -157,12 +157,12 @@ type DeleteResourceTagRequest struct {
 }
 
 func (r *DeleteResourceTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DeleteResourceTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DeleteResourceTagResponse struct {
@@ -175,12 +175,12 @@ type DeleteResourceTagResponse struct {
 }
 
 func (r *DeleteResourceTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DeleteResourceTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DeleteTagRequest struct {
@@ -194,12 +194,12 @@ type DeleteTagRequest struct {
 }
 
 func (r *DeleteTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DeleteTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DeleteTagResponse struct {
@@ -212,12 +212,12 @@ type DeleteTagResponse struct {
 }
 
 func (r *DeleteTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DeleteTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByResourceIdsRequest struct {
@@ -243,12 +243,12 @@ type DescribeResourceTagsByResourceIdsRequest struct {
 }
 
 func (r *DescribeResourceTagsByResourceIdsRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByResourceIdsRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByResourceIdsResponse struct {
@@ -273,12 +273,12 @@ type DescribeResourceTagsByResourceIdsResponse struct {
 }
 
 func (r *DescribeResourceTagsByResourceIdsResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByResourceIdsResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByResourceIdsSeqRequest struct {
@@ -304,12 +304,12 @@ type DescribeResourceTagsByResourceIdsSeqRequest struct {
 }
 
 func (r *DescribeResourceTagsByResourceIdsSeqRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByResourceIdsSeqRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByResourceIdsSeqResponse struct {
@@ -334,12 +334,12 @@ type DescribeResourceTagsByResourceIdsSeqResponse struct {
 }
 
 func (r *DescribeResourceTagsByResourceIdsSeqResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByResourceIdsSeqResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByTagKeysRequest struct {
@@ -368,12 +368,12 @@ type DescribeResourceTagsByTagKeysRequest struct {
 }
 
 func (r *DescribeResourceTagsByTagKeysRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByTagKeysRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsByTagKeysResponse struct {
@@ -398,12 +398,12 @@ type DescribeResourceTagsByTagKeysResponse struct {
 }
 
 func (r *DescribeResourceTagsByTagKeysResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsByTagKeysResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsRequest struct {
@@ -435,12 +435,12 @@ type DescribeResourceTagsRequest struct {
 }
 
 func (r *DescribeResourceTagsRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourceTagsResponse struct {
@@ -454,7 +454,7 @@ type DescribeResourceTagsResponse struct {
 		Offset *uint64 `json:"Offset,omitempty" name:"Offset"`
 
 		// 每页大小
-	// 注意：此字段可能返回 null，表示取不到有效值。
+		// 注意：此字段可能返回 null，表示取不到有效值。
 		Limit *uint64 `json:"Limit,omitempty" name:"Limit"`
 
 		// 资源标签
@@ -466,12 +466,12 @@ type DescribeResourceTagsResponse struct {
 }
 
 func (r *DescribeResourceTagsResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourceTagsResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourcesByTagsRequest struct {
@@ -503,12 +503,12 @@ type DescribeResourcesByTagsRequest struct {
 }
 
 func (r *DescribeResourcesByTagsRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourcesByTagsRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourcesByTagsResponse struct {
@@ -522,7 +522,7 @@ type DescribeResourcesByTagsResponse struct {
 		Offset *uint64 `json:"Offset,omitempty" name:"Offset"`
 
 		// 每页大小
-	// 注意：此字段可能返回 null，表示取不到有效值。
+		// 注意：此字段可能返回 null，表示取不到有效值。
 		Limit *uint64 `json:"Limit,omitempty" name:"Limit"`
 
 		// 资源标签
@@ -534,12 +534,12 @@ type DescribeResourcesByTagsResponse struct {
 }
 
 func (r *DescribeResourcesByTagsResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourcesByTagsResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourcesByTagsUnionRequest struct {
@@ -571,12 +571,12 @@ type DescribeResourcesByTagsUnionRequest struct {
 }
 
 func (r *DescribeResourcesByTagsUnionRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourcesByTagsUnionRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeResourcesByTagsUnionResponse struct {
@@ -601,12 +601,12 @@ type DescribeResourcesByTagsUnionResponse struct {
 }
 
 func (r *DescribeResourcesByTagsUnionResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeResourcesByTagsUnionResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagKeysRequest struct {
@@ -626,12 +626,12 @@ type DescribeTagKeysRequest struct {
 }
 
 func (r *DescribeTagKeysRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagKeysRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagKeysResponse struct {
@@ -656,12 +656,12 @@ type DescribeTagKeysResponse struct {
 }
 
 func (r *DescribeTagKeysResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagKeysResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagValuesRequest struct {
@@ -681,12 +681,12 @@ type DescribeTagValuesRequest struct {
 }
 
 func (r *DescribeTagValuesRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagValuesRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagValuesResponse struct {
@@ -711,12 +711,12 @@ type DescribeTagValuesResponse struct {
 }
 
 func (r *DescribeTagValuesResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagValuesResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagValuesSeqRequest struct {
@@ -736,12 +736,12 @@ type DescribeTagValuesSeqRequest struct {
 }
 
 func (r *DescribeTagValuesSeqRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagValuesSeqRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagValuesSeqResponse struct {
@@ -766,12 +766,12 @@ type DescribeTagValuesSeqResponse struct {
 }
 
 func (r *DescribeTagValuesSeqResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagValuesSeqResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagsRequest struct {
@@ -800,12 +800,12 @@ type DescribeTagsRequest struct {
 }
 
 func (r *DescribeTagsRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagsRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagsResponse struct {
@@ -830,12 +830,12 @@ type DescribeTagsResponse struct {
 }
 
 func (r *DescribeTagsResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagsResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagsSeqRequest struct {
@@ -864,12 +864,12 @@ type DescribeTagsSeqRequest struct {
 }
 
 func (r *DescribeTagsSeqRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagsSeqRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DescribeTagsSeqResponse struct {
@@ -894,12 +894,12 @@ type DescribeTagsSeqResponse struct {
 }
 
 func (r *DescribeTagsSeqResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DescribeTagsSeqResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DetachResourcesTagRequest struct {
@@ -922,12 +922,12 @@ type DetachResourcesTagRequest struct {
 }
 
 func (r *DetachResourcesTagRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DetachResourcesTagRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type DetachResourcesTagResponse struct {
@@ -940,12 +940,12 @@ type DetachResourcesTagResponse struct {
 }
 
 func (r *DetachResourcesTagResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *DetachResourcesTagResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type ModifyResourceTagsRequest struct {
@@ -962,12 +962,12 @@ type ModifyResourceTagsRequest struct {
 }
 
 func (r *ModifyResourceTagsRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *ModifyResourceTagsRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type ModifyResourceTagsResponse struct {
@@ -980,12 +980,12 @@ type ModifyResourceTagsResponse struct {
 }
 
 func (r *ModifyResourceTagsResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *ModifyResourceTagsResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type ModifyResourcesTagValueRequest struct {
@@ -1011,12 +1011,12 @@ type ModifyResourcesTagValueRequest struct {
 }
 
 func (r *ModifyResourcesTagValueRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *ModifyResourcesTagValueRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type ModifyResourcesTagValueResponse struct {
@@ -1029,12 +1029,12 @@ type ModifyResourcesTagValueResponse struct {
 }
 
 func (r *ModifyResourcesTagValueResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *ModifyResourcesTagValueResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type ResourceIdTag struct {
@@ -1143,12 +1143,12 @@ type UpdateResourceTagValueRequest struct {
 }
 
 func (r *UpdateResourceTagValueRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *UpdateResourceTagValueRequest) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
 
 type UpdateResourceTagValueResponse struct {
@@ -1161,10 +1161,10 @@ type UpdateResourceTagValueResponse struct {
 }
 
 func (r *UpdateResourceTagValueResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func (r *UpdateResourceTagValueResponse) FromJsonString(s string) error {
-    return json.Unmarshal([]byte(s), &r)
+	return json.Unmarshal([]byte(s), &r)
 }
